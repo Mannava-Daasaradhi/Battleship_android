@@ -1,5 +1,7 @@
+// FILE: app/build.gradle.kts
 plugins {
     id("battleship.android.application")
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.google.services)
     alias(libs.plugins.firebase.crashlytics)
     alias(libs.plugins.baseline.profile)
@@ -24,7 +26,9 @@ android {
             )
         }
         debug {
-            applicationIdSuffix = ".debug"
+            // applicationIdSuffix removed: google-services.json only has the base
+            // package name registered. Add a debug entry in Firebase Console and
+            // re-download google-services.json before re-enabling this.
             isDebuggable = true
         }
     }
@@ -52,6 +56,9 @@ dependencies {
     // Navigation + Activity
     implementation(libs.navigation.compose)
     implementation(libs.activity.compose)
+
+    // Serialization — required for @Serializable routes in Routes.kt
+    implementation(libs.kotlinx.serialization.json)
 
     // Hilt root
     implementation(libs.hilt.android)

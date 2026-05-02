@@ -28,6 +28,10 @@ coroutines                    = "1.9.0"
 
 # Firebase
 firebase-bom                  = "34.0.0"
+firebase-analytics-ktx        = "22.3.0"
+firebase-crashlytics-ktx      = "19.4.2"
+firebase-auth-ktx             = "23.2.0"
+firebase-database-ktx         = "21.0.0"
 
 # Google Play
 play-services-games-v2        = "20.1.2"
@@ -102,10 +106,10 @@ coroutines-test             = { group = "org.jetbrains.kotlinx", name = "kotlinx
 
 # ── Firebase ──────────────────────────────────────────────────────────────
 firebase-bom                = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebase-bom" }
-firebase-analytics          = { group = "com.google.firebase", name = "firebase-analytics-ktx" }
-firebase-crashlytics        = { group = "com.google.firebase", name = "firebase-crashlytics-ktx" }
-firebase-auth               = { group = "com.google.firebase", name = "firebase-auth-ktx" }
-firebase-database           = { group = "com.google.firebase", name = "firebase-database-ktx" }
+firebase-analytics          = { group = "com.google.firebase", name = "firebase-analytics-ktx", version.ref = "firebase-analytics-ktx" }
+firebase-crashlytics        = { group = "com.google.firebase", name = "firebase-crashlytics-ktx", version.ref = "firebase-crashlytics-ktx" }
+firebase-auth               = { group = "com.google.firebase", name = "firebase-auth-ktx", version.ref = "firebase-auth-ktx" }
+firebase-database           = { group = "com.google.firebase", name = "firebase-database-ktx", version.ref = "firebase-database-ktx" }
 
 # ── Google Play ───────────────────────────────────────────────────────────
 play-services-games-v2      = { group = "com.google.android.gms", name = "play-services-games-v2", version.ref = "play-services-games-v2" }

@@ -1,3 +1,4 @@
+// FILE: app/src/debug/kotlin/com/battleship/fleetcommand/DebugApplication.kt
 package com.battleship.fleetcommand
 
 import leakcanary.LeakCanary

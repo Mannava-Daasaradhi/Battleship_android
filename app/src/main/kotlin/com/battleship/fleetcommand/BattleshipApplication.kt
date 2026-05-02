@@ -1,7 +1,8 @@
+// FILE: app/src/main/kotlin/com/battleship/fleetcommand/BattleshipApplication.kt
 package com.battleship.fleetcommand
 
 import android.app.Application
 import dagger.hilt.android.HiltAndroidApp
 
 @HiltAndroidApp
-class BattleshipApplication : Application()
+open class BattleshipApplication : Application()
