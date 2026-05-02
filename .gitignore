@@ -1,1 +1,26 @@
-*.md
+# Android
+*.iml
+.gradle/
+local.properties
+.idea/
+*.DS_Store
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# Firebase — NEVER commit real google-services.json
+app/google-services.json
+# Commit this template with dummy values instead
+!app/google-services.json.template
+
+# Secrets
+*.env
+secrets.properties
+
+instruct.md
+battleship_instruct_prompt_v3.md

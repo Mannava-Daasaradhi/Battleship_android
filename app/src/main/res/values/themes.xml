@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Minimal window theme for MainActivity.
+        The actual visual theming is 100% done in Compose via BattleshipTheme.
+        This XML theme exists only to satisfy the Android window system before
+        Compose takes over — it sets the window background to match our navy
+        colour so there is no white flash on launch.
+    -->
+    <style name="Theme.App.Starting" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/navy_background</item>
+        <item name="android:statusBarColor">@color/navy_background</item>
+        <item name="android:navigationBarColor">@color/navy_background</item>
+    </style>
+</resources>
