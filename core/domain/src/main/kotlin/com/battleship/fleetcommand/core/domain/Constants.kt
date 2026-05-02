@@ -1,4 +1,5 @@
 // FILE: core/domain/src/main/kotlin/com/battleship/fleetcommand/core/domain/Constants.kt
+
 package com.battleship.fleetcommand.core.domain
 
 object GameConstants {
