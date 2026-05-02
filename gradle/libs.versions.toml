@@ -10,6 +10,8 @@ ksp                           = "2.0.21-1.0.28"
 
 # Compose
 compose-bom                   = "2024.12.01"
+compose-ui                    = "1.7.6"
+compose-material3             = "1.3.1"
 activity-compose              = "1.9.3"
 navigation-compose            = "2.8.5"
 material3-adaptive            = "1.0.0"
@@ -66,16 +68,16 @@ benchmark-macro               = "1.3.3"
 [libraries]
 # ── Compose BOM ──────────────────────────────────────────────────────────
 compose-bom                 = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
-compose-ui                  = { group = "androidx.compose.ui", name = "ui" }
-compose-ui-graphics         = { group = "androidx.compose.ui", name = "ui-graphics" }
-compose-ui-tooling-preview  = { group = "androidx.compose.ui", name = "ui-tooling-preview" }
-compose-ui-tooling          = { group = "androidx.compose.ui", name = "ui-tooling" }
-compose-ui-test-manifest    = { group = "androidx.compose.ui", name = "ui-test-manifest" }
-compose-ui-test-junit4      = { group = "androidx.compose.ui", name = "ui-test-junit4" }
-compose-material3           = { group = "androidx.compose.material3", name = "material3" }
+compose-ui                  = { group = "androidx.compose.ui", name = "ui", version.ref = "compose-ui" }
+compose-ui-graphics         = { group = "androidx.compose.ui", name = "ui-graphics", version.ref = "compose-ui" }
+compose-ui-tooling-preview  = { group = "androidx.compose.ui", name = "ui-tooling-preview", version.ref = "compose-ui" }
+compose-ui-tooling          = { group = "androidx.compose.ui", name = "ui-tooling", version.ref = "compose-ui" }
+compose-ui-test-manifest    = { group = "androidx.compose.ui", name = "ui-test-manifest", version.ref = "compose-ui" }
+compose-ui-test-junit4      = { group = "androidx.compose.ui", name = "ui-test-junit4", version.ref = "compose-ui" }
+compose-material3           = { group = "androidx.compose.material3", name = "material3", version.ref = "compose-material3" }
 compose-material3-adaptive  = { group = "androidx.compose.material3.adaptive", name = "adaptive", version.ref = "material3-adaptive" }
-compose-foundation          = { group = "androidx.compose.foundation", name = "foundation" }
-compose-animation           = { group = "androidx.compose.animation", name = "animation" }
+compose-foundation          = { group = "androidx.compose.foundation", name = "foundation", version.ref = "compose-ui" }
+compose-animation           = { group = "androidx.compose.animation", name = "animation", version.ref = "compose-ui" }
 
 # ── Activity & Navigation ────────────────────────────────────────────────
 activity-compose            = { group = "androidx.activity", name = "activity-compose", version.ref = "activity-compose" }
