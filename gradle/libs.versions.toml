@@ -32,7 +32,6 @@ firebase-bom                  = "34.0.0"
 # Google Play
 play-services-games-v2        = "20.1.2"
 
-
 # Image loading
 coil                          = "2.7.0"
 lottie-compose                = "6.6.0"
@@ -58,6 +57,7 @@ compose-ui-test               = "1.7.6"
 # Build Tools
 baseline-profile-gradle       = "1.3.4"
 benchmark-macro               = "1.3.3"
+
 
 [libraries]
 # ── Compose BOM ──────────────────────────────────────────────────────────
@@ -110,7 +110,6 @@ firebase-database           = { group = "com.google.firebase", name = "firebase-
 # ── Google Play ───────────────────────────────────────────────────────────
 play-services-games-v2      = { group = "com.google.android.gms", name = "play-services-games-v2", version.ref = "play-services-games-v2" }
 
-
 # ── Image / Animation ─────────────────────────────────────────────────────
 coil-compose                = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 lottie-compose              = { group = "com.airbnb.android", name = "lottie-compose", version.ref = "lottie-compose" }
@@ -136,6 +135,7 @@ mockk-android               = { group = "io.mockk", name = "mockk-android", vers
 
 # ── Benchmark ─────────────────────────────────────────────────────────────
 benchmark-macro             = { group = "androidx.benchmark", name = "benchmark-macro-junit4", version.ref = "benchmark-macro" }
+
 
 [plugins]
 android-application         = { id = "com.android.application", version.ref = "android-gradle-plugin" }
