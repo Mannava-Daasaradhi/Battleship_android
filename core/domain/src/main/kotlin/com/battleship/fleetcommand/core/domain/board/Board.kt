@@ -1,5 +1,4 @@
 // FILE: core/domain/src/main/kotlin/com/battleship/fleetcommand/core/domain/board/Board.kt
-
 package com.battleship.fleetcommand.core.domain.board
 
 import com.battleship.fleetcommand.core.domain.Coord
@@ -7,38 +6,24 @@ import com.battleship.fleetcommand.core.domain.GameConstants
 import com.battleship.fleetcommand.core.domain.iterateAllCoords
 import com.battleship.fleetcommand.core.domain.ship.ShipId
 import com.battleship.fleetcommand.core.domain.ship.ShipPlacement
-import com.battleship.fleetcommand.core.domain.ship.ShipRegistry
 
-/**
- * Immutable 10×10 board.
- *
- * Internal representation:
- *   - [cells]     IntArray(100) storing CellState ordinals for Water/Hit/Miss/Sunk presence.
- *   - [ships]     List<ShipPlacement> storing full ship metadata (position, orientation).
- *
- * All mutating operations return a new Board — never mutate in place.
- * Section 4.1 spec.
- */
 data class Board(
     val cells: IntArray = IntArray(GameConstants.BOARD_SIZE * GameConstants.BOARD_SIZE) { CellState.Water.ordinal },
     val ships: List<ShipPlacement> = emptyList()
 ) {
-
-    // ── Cell queries ──────────────────────────────────────────────────────
+    companion object {
+        /** Board dimension — 10. Use instead of Board.DIMENSION everywhere. */
+        const val DIMENSION = GameConstants.BOARD_SIZE
+        fun empty(): Board = Board()
+    }
 
     fun cellAt(coord: Coord): CellState = CellState.fromOrdinal(cells[coord.index])
-
     fun isHit(coord: Coord): Boolean = cellAt(coord) == CellState.Hit
-
     fun isMiss(coord: Coord): Boolean = cellAt(coord) == CellState.Miss
-
     fun isShot(coord: Coord): Boolean = cellAt(coord).let {
         it == CellState.Hit || it == CellState.Miss || it is CellState.Sunk
     }
-
     fun isOccupied(coord: Coord): Boolean = cellAt(coord) is CellState.Ship
-
-    // ── Immutable update helpers ──────────────────────────────────────────
 
     fun withCell(coord: Coord, state: CellState): Board {
         val copy = cells.copyOf()
@@ -55,12 +40,10 @@ data class Board(
     fun withShip(placement: ShipPlacement): Board {
         val updatedCells = cells.copyOf()
         placement.occupiedCoords().forEach { coord ->
-            updatedCells[coord.index] = CellState.Ship(placement.shipId).ordinal
+            updatedCells[coord.index] = CellState.Ship(placement.shipId, placement.orientation).ordinal
         }
         return copy(cells = updatedCells, ships = ships + placement)
     }
-
-    // ── Ship queries ──────────────────────────────────────────────────────
 
     fun placementFor(shipId: ShipId): ShipPlacement? =
         ships.firstOrNull { it.shipId == shipId }
@@ -81,8 +64,6 @@ data class Board(
             placement.occupiedCoords().any { it.index == coord.index }
         }
 
-    // ── Board-wide iteration ──────────────────────────────────────────────
-
     inline fun forEachCell(action: (Coord, CellState) -> Unit) {
         var i = 0
         while (i < GameConstants.BOARD_SIZE * GameConstants.BOARD_SIZE) {
@@ -92,9 +73,7 @@ data class Board(
     }
 
     fun unshotCoords(): List<Coord> = buildList {
-        iterateAllCoords { coord ->
-            if (!isShot(coord)) add(coord)
-        }
+        iterateAllCoords { coord -> if (!isShot(coord)) add(coord) }
     }
 
     fun shotCount(): Int {
@@ -109,16 +88,6 @@ data class Board(
         return count
     }
 
-    fun remainingShipCells(): Int =
-        ShipRegistry.TOTAL_SHIP_CELLS - hitCount()
-
-    // ── Fog-of-war projection ─────────────────────────────────────────────
-
-    /**
-     * Returns a copy of this board with ship positions hidden —
-     * used to show the opponent's board to the attacking player.
-     * Ship cells appear as Water; only Hit/Miss/Sunk are visible.
-     */
     fun toFogOfWar(): Board {
         val fogCells = cells.copyOf()
         iterateAllCoords { coord ->
@@ -128,8 +97,6 @@ data class Board(
         }
         return copy(cells = fogCells, ships = emptyList())
     }
-
-    // ── equals / hashCode — needed because IntArray doesn't auto-compare ──
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -141,11 +108,5 @@ data class Board(
         var result = cells.contentHashCode()
         result = 31 * result + ships.hashCode()
         return result
-    }
-
-    // ── Factory ───────────────────────────────────────────────────────────
-
-    companion object {
-        fun empty(): Board = Board()
     }
 }
