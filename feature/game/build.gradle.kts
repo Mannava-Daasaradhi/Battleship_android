@@ -7,5 +7,7 @@ dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:ai"))
     implementation(project(":core:multiplayer"))
+    implementation(libs.timber)
+    implementation(libs.kotlinx.collections.immutable)
     testImplementation(project(":core:testing"))
 }

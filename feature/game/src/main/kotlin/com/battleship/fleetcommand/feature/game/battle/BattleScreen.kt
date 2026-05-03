@@ -1,20 +1,19 @@
-// ============================================================
-// feature/game/src/main/kotlin/com/battleship/fleetcommand/feature/game/battle/BattleScreen.kt
-// ============================================================
-// FILE: feature/game/src/main/kotlin/com/battleship/fleetcommand/feature/game/battle/BattleScreen.kt
 package com.battleship.fleetcommand.feature.game.battle
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Flag
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -48,11 +47,11 @@ fun BattleScreen(
         viewModel.uiEffect.collectLatest { effect ->
             when (effect) {
                 is BattleViewModel.UiEffect.NavigateToGameOver ->
-                    navController.navigate(GameOverRoute) {
+                    navController.navigate(GameOverRoute(gameId = effect.gameId, winner = effect.winner)) {
                         popUpTo(navController.graph.startDestinationId) { inclusive = false }
                     }
                 BattleViewModel.UiEffect.ShowResignDialog -> showResignDialog = true
-                is BattleViewModel.UiEffect.ShowHitAnimation  -> { /* animation emitted, GameGrid handles via effect */ }
+                is BattleViewModel.UiEffect.ShowHitAnimation  -> { }
                 is BattleViewModel.UiEffect.ShowMissAnimation -> { }
                 is BattleViewModel.UiEffect.ShowSunkAnimation -> { }
             }
@@ -67,7 +66,9 @@ fun BattleScreen(
             confirmButton = {
                 TextButton(onClick = {
                     showResignDialog = false
-                    navController.navigate(GameOverRoute) { popUpTo(0) { inclusive = false } }
+                    navController.navigate(GameOverRoute(gameId = "", winner = "AI")) {
+                        popUpTo(0) { inclusive = false }
+                    }
                 }) { Text("Resign") }
             },
             dismissButton = {
@@ -88,7 +89,8 @@ fun BattleScreen(
                 },
                 actions = {
                     IconButton(onClick = { viewModel.onEvent(BattleViewModel.UiEvent.ResignGame) }) {
-                        Icon(Icons.Default.Flag, contentDescription = "Resign")
+                        // Flag icon is in extended icons only — Close is semantically "exit/resign"
+                        Icon(Icons.Default.Close, contentDescription = "Resign")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -103,7 +105,6 @@ fun BattleScreen(
                 .padding(horizontal = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Accuracy indicator
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -111,15 +112,11 @@ fun BattleScreen(
                 Text("Shots: ${uiState.shotCount}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onBackground)
                 Text("Hits: ${uiState.hitCount}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onBackground)
             }
-
-            // Enemy board label
             Text(
                 "ENEMY WATERS",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
-
-            // Opponent grid — fog of war
             Box {
                 GameGrid(
                     board = uiState.opponentBoard,
@@ -135,13 +132,8 @@ fun BattleScreen(
                     AiThinkingDotsOverlay(modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
                 }
             }
-
             HorizontalDivider()
-
-            // My board label
             Text("YOUR FLEET", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-
-            // My board — full visibility
             GameGrid(
                 board = uiState.myBoard,
                 showShips = true,
@@ -163,7 +155,7 @@ private fun AiThinkingDotsOverlay(modifier: Modifier = Modifier) {
                 animationSpec = infiniteRepeatable(
                     animation = tween(400),
                     repeatMode = RepeatMode.Reverse,
-                    initialStartOffset = androidx.compose.animation.core.StartOffset(index * 133),
+                    initialStartOffset = StartOffset(index * 133),
                 ),
                 label = "dot$index",
             )
@@ -171,7 +163,7 @@ private fun AiThinkingDotsOverlay(modifier: Modifier = Modifier) {
                 Modifier
                     .size(8.dp)
                     .graphicsLayer { translationY = offsetY }
-                    .background(MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.CircleShape)
+                    .background(MaterialTheme.colorScheme.primary, CircleShape)
             )
         }
     }

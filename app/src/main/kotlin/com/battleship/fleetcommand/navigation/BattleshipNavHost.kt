@@ -1,7 +1,3 @@
-// ============================================================
-// app/src/main/kotlin/com/battleship/fleetcommand/navigation/BattleshipNavHost.kt
-// ============================================================
-// FILE: app/src/main/kotlin/com/battleship/fleetcommand/navigation/BattleshipNavHost.kt
 package com.battleship.fleetcommand.navigation
 
 import androidx.compose.animation.core.Spring
@@ -19,6 +15,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.toRoute
 import com.battleship.fleetcommand.feature.game.battle.BattleScreen
 import com.battleship.fleetcommand.feature.game.gameover.GameOverScreen
 import com.battleship.fleetcommand.feature.game.handoff.HandOffScreen
@@ -31,7 +28,6 @@ import com.battleship.fleetcommand.feature.menu.PlayerNamesScreen
 import com.battleship.fleetcommand.feature.settings.SettingsScreen
 import com.battleship.fleetcommand.feature.setup.ShipPlacementScreen
 import com.battleship.fleetcommand.feature.stats.StatisticsScreen
-import androidx.navigation.toRoute
 
 /**
  * Full navigation graph per Section 12.
@@ -52,7 +48,7 @@ fun BattleshipNavHost(modifier: Modifier = Modifier) {
         popExitTransition   = { fadeOut(tween(300)) + slideOutHorizontally(tween(300)) { it / 4 } },
     ) {
 
-        // ── Main Menu ─────────────────────────────────────────────────────
+        // ── Main Menu ───────────────────────────────────────────────────────────
         composable<MainMenuRoute>(
             enterTransition = { fadeIn(tween(300)) },
             exitTransition  = { fadeOut(tween(300)) + slideOutHorizontally(tween(300)) { -it / 4 } },
@@ -60,29 +56,29 @@ fun BattleshipNavHost(modifier: Modifier = Modifier) {
             MainMenuScreen(navController = navController, viewModel = hiltViewModel())
         }
 
-        // ── Mode Select ───────────────────────────────────────────────────
+        // ── Mode Select ─────────────────────────────────────────────────────────
         composable<ModeSelectRoute> {
             ModeSelectScreen(navController = navController, viewModel = hiltViewModel())
         }
 
-        // ── Difficulty Select ─────────────────────────────────────────────
+        // ── Difficulty Select ───────────────────────────────────────────────────
         composable<DifficultyRoute> { backStackEntry ->
             val route = backStackEntry.toRoute<DifficultyRoute>()
             DifficultyScreen(navController = navController, viewModel = hiltViewModel(), route = route)
         }
 
-        // ── Player Names (Pass & Play) ────────────────────────────────────
+        // ── Player Names (Pass & Play) ──────────────────────────────────────────
         composable<PlayerNamesRoute> {
             PlayerNamesScreen(navController = navController, viewModel = hiltViewModel())
         }
 
-        // ── Ship Placement ────────────────────────────────────────────────
+        // ── Ship Placement ──────────────────────────────────────────────────────
         composable<ShipPlacementRoute> { backStackEntry ->
             val route = backStackEntry.toRoute<ShipPlacementRoute>()
             ShipPlacementScreen(navController = navController, viewModel = hiltViewModel(), route = route)
         }
 
-        // ── Hand-Off Screen — Section 12: fadeIn(600ms) / fadeOut(600ms) ─
+        // ── Hand-Off Screen — Section 12: fadeIn(600ms) / fadeOut(600ms) ───────
         composable<HandOffRoute>(
             enterTransition = { fadeIn(tween(600)) },
             exitTransition  = { fadeOut(tween(600)) },
@@ -93,24 +89,28 @@ fun BattleshipNavHost(modifier: Modifier = Modifier) {
             HandOffScreen(navController = navController, viewModel = hiltViewModel(), route = route)
         }
 
-        // ── Battle Screen ─────────────────────────────────────────────────
+        // ── Battle Screen ───────────────────────────────────────────────────────
         composable<BattleRoute> { backStackEntry ->
             val route = backStackEntry.toRoute<BattleRoute>()
             BattleScreen(navController = navController, viewModel = hiltViewModel(), route = route)
         }
 
-        // ── Online Lobby ──────────────────────────────────────────────────
+        // ── Online Lobby ────────────────────────────────────────────────────────
         composable<OnlineLobbyRoute> {
-            OnlineLobbyScreen(navController = navController, viewModel = hiltViewModel(), route = OnlineLobbyRoute)
+            OnlineLobbyScreen(navController = navController, viewModel = hiltViewModel())
         }
 
-        // ── Waiting for Opponent ──────────────────────────────────────────
+        // ── Waiting for Opponent ────────────────────────────────────────────────
         composable<WaitingForOpponentRoute> { backStackEntry ->
             val route = backStackEntry.toRoute<WaitingForOpponentRoute>()
-            WaitingForOpponentScreen(navController = navController, viewModel = hiltViewModel(), route = route)
+            WaitingForOpponentScreen(
+                navController = navController,
+                viewModel = hiltViewModel(),
+                gameId = route.gameId,
+            )
         }
 
-        // ── Game Over — Section 12: scaleIn(0.8→1.0, MediumBouncy) + fadeIn ─
+        // ── Game Over — Section 12: scaleIn(0.8→1.0, MediumBouncy) + fadeIn ───
         composable<GameOverRoute>(
             enterTransition = {
                 scaleIn(
@@ -126,12 +126,12 @@ fun BattleshipNavHost(modifier: Modifier = Modifier) {
             GameOverScreen(navController = navController, viewModel = hiltViewModel(), route = route)
         }
 
-        // ── Statistics ────────────────────────────────────────────────────
+        // ── Statistics ──────────────────────────────────────────────────────────
         composable<StatisticsRoute> {
             StatisticsScreen(navController = navController, viewModel = hiltViewModel())
         }
 
-        // ── Settings ──────────────────────────────────────────────────────
+        // ── Settings ────────────────────────────────────────────────────────────
         composable<SettingsRoute> {
             SettingsScreen(navController = navController, viewModel = hiltViewModel())
         }

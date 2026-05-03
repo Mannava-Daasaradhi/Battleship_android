@@ -1,7 +1,3 @@
-// ============================================================
-// feature/game/src/main/kotlin/com/battleship/fleetcommand/feature/game/gameover/GameOverScreen.kt
-// ============================================================
-// FILE: feature/game/src/main/kotlin/com/battleship/fleetcommand/feature/game/gameover/GameOverScreen.kt
 package com.battleship.fleetcommand.feature.game.gameover
 
 import androidx.activity.compose.BackHandler
@@ -17,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -28,13 +25,15 @@ import com.battleship.fleetcommand.core.ui.components.GameGrid
 import com.battleship.fleetcommand.core.ui.theme.HitRed
 import com.battleship.fleetcommand.core.ui.theme.NavyBackground
 import com.battleship.fleetcommand.core.ui.theme.NavySurface
-import com.battleship.fleetcommand.core.ui.theme.OnlineGreen
 import com.battleship.fleetcommand.navigation.MainMenuRoute
 import com.battleship.fleetcommand.navigation.ModeSelectRoute
 import com.battleship.fleetcommand.navigation.StatisticsRoute
 import kotlinx.coroutines.flow.collectLatest
 
 // ADS PLACEHOLDER — owner will integrate AdMob interstitial here in a future update
+
+// OnlineGreen inline — avoids dependency on a specific core:ui color token name
+private val OnlineGreen = Color(0xFF4CAF50)
 
 @Composable
 fun GameOverScreen(
@@ -57,7 +56,8 @@ fun GameOverScreen(
                 GameOverViewModel.UiEffect.NavigateToStatistics ->
                     navController.navigate(StatisticsRoute)
                 GameOverViewModel.UiEffect.NavigateToModeSelect ->
-                    navController.navigate(ModeSelectRoute) { popUpTo(MainMenuRoute) { inclusive = false } }
+                    // inclusive is false by default — do NOT set it explicitly (private setter)
+                    navController.navigate(ModeSelectRoute) { popUpTo(MainMenuRoute) }
             }
         }
     }
@@ -137,7 +137,6 @@ fun GameOverScreen(
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
                     )
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),

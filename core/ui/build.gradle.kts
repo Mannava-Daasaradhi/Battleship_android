@@ -19,6 +19,9 @@ dependencies {
     api(libs.compose.animation)
     implementation(libs.compose.ui.tooling.preview)
 
+    api(libs.navigation.compose)
+    api(libs.kotlinx.serialization.json)
+
     implementation(libs.lottie.compose)
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.collections.immutable)

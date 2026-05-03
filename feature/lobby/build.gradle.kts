@@ -6,5 +6,6 @@ dependencies {
     implementation(project(":core:ui"))
     implementation(project(":core:domain"))
     implementation(project(":core:multiplayer"))
+    implementation(libs.timber)
     testImplementation(project(":core:testing"))
 }

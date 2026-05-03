@@ -1,5 +1,3 @@
-// feature/game/src/main/kotlin/com/battleship/fleetcommand/feature/game/online/OnlineGameViewModel.kt
-
 package com.battleship.fleetcommand.feature.game.online
 
 import androidx.compose.runtime.Immutable
@@ -41,8 +39,7 @@ class OnlineGameViewModel @Inject constructor(
     private val hapticManager: HapticManager
 ) : ViewModel() {
 
-    // ── UiState ───────────────────────────────────────────────────────────────
-
+    // ── UiState ────────────────────────────────────────────────────────────────
     @Immutable
     data class UiState(
         val gameId: String = "",
@@ -60,16 +57,14 @@ class OnlineGameViewModel @Inject constructor(
     enum class ConnectionStatus { CONNECTED, RECONNECTING, DISCONNECTED }
     enum class GameStatus { SETUP, BATTLE, FINISHED }
 
-    // ── UiEvent ───────────────────────────────────────────────────────────────
-
+    // ── UiEvent ────────────────────────────────────────────────────────────────
     sealed class UiEvent {
         data class CellTapped(val coord: Coord) : UiEvent()
         data object ResignGame : UiEvent()
         data object ClaimVictoryOnTimeout : UiEvent()
     }
 
-    // ── UiEffect ──────────────────────────────────────────────────────────────
-
+    // ── UiEffect ───────────────────────────────────────────────────────────────
     sealed class UiEffect {
         data class ShowHitAnimation(val coord: Coord) : UiEffect()
         data class ShowMissAnimation(val coord: Coord) : UiEffect()
@@ -85,8 +80,7 @@ class OnlineGameViewModel @Inject constructor(
     private val _effects = Channel<UiEffect>(Channel.BUFFERED)
     val effects = _effects.receiveAsFlow()
 
-    // ── Internal state ────────────────────────────────────────────────────────
-
+    // ── Internal state ─────────────────────────────────────────────────────────
     private var disconnectTimerJob: Job? = null
     private var gameObserverJob: Job? = null
     private var opponentShotJob: Job? = null
@@ -94,16 +88,14 @@ class OnlineGameViewModel @Inject constructor(
     // Track which opponent shots have already been resolved to avoid double-processing
     private val resolvedShotIndices = mutableSetOf<Int>()
 
-    // ── Init ──────────────────────────────────────────────────────────────────
-
+    // ── Init ───────────────────────────────────────────────────────────────────
     fun init(gameId: String, myUid: String) {
         _uiState.update { it.copy(gameId = gameId, myUid = myUid) }
         startObservingGame(gameId, myUid)
         startObservingOpponentShots(gameId)
     }
 
-    // ── onEvent ───────────────────────────────────────────────────────────────
-
+    // ── onEvent ────────────────────────────────────────────────────────────────
     fun onEvent(event: UiEvent) {
         when (event) {
             is UiEvent.CellTapped            -> handleCellTapped(event.coord)
@@ -112,8 +104,7 @@ class OnlineGameViewModel @Inject constructor(
         }
     }
 
-    // ── Game state observer ───────────────────────────────────────────────────
-
+    // ── Game state observer ────────────────────────────────────────────────────
     private fun startObservingGame(gameId: String, myUid: String) {
         gameObserverJob?.cancel()
         gameObserverJob = viewModelScope.launch {
@@ -129,6 +120,7 @@ class OnlineGameViewModel @Inject constructor(
         val opponentConn = opponentData?.connected == true
         val opponentName = opponentData?.name ?: "Opponent"
         val isMyTurn     = state.currentTurn == myUid
+
         val newStatus = when (state.status) {
             "setup"    -> GameStatus.SETUP
             "battle"   -> GameStatus.BATTLE
@@ -155,17 +147,16 @@ class OnlineGameViewModel @Inject constructor(
         }
 
         // Navigate to game over when a winner is declared
-        if (state.winner != null && newStatus == GameStatus.FINISHED) {
+        // Use ?: "" to avoid smart-cast-impossible on public API property
+        val winner = state.winner ?: ""
+        if (winner.isNotEmpty() && newStatus == GameStatus.FINISHED) {
             viewModelScope.launch {
-                _effects.send(UiEffect.NavigateToGameOver(state.winner))
+                _effects.send(UiEffect.NavigateToGameOver(winner))
             }
         }
     }
 
-    // ── Opponent shot observer ────────────────────────────────────────────────
-    // The interface returns Flow<List<ShotData>> — we process any new (unresolved)
-    // shots at the end of the list each time the list grows.
-
+    // ── Opponent shot observer ─────────────────────────────────────────────────
     private fun startObservingOpponentShots(gameId: String) {
         opponentShotJob?.cancel()
         opponentShotJob = viewModelScope.launch {
@@ -179,17 +170,14 @@ class OnlineGameViewModel @Inject constructor(
         shots.forEachIndexed { index, shotData ->
             if (index in resolvedShotIndices) return@forEachIndexed
             if (shotData.result != null) return@forEachIndexed // already resolved by defender
-
             resolvedShotIndices.add(index)
+
             val coord = Coord.fromRowCol(shotData.row, shotData.col)
 
             // Resolve against our local ship placements via GameEngine
             // NOTE: GameEngine.fireShot needs placements + shot history — simplified here
             // as a pass-through; full integration requires passing board state from UiState
-            val outcome: ShotOutcome = when {
-                // Delegate to game engine if it can resolve; fallback to MISS
-                else -> ShotOutcome.Miss
-            }
+            val outcome: ShotOutcome = ShotOutcome.Miss
 
             // Map ShotOutcome -> FireResult for writing back
             val fireResult: FireResult = when (outcome) {
@@ -201,12 +189,7 @@ class OnlineGameViewModel @Inject constructor(
             // Write the result back so the attacker's device can see it
             repository.writeShotResult(
                 gameId     = gameId,
-                shooterUid = _uiState.value.let { s ->
-                    // opponentUid from current state
-                    repository.observeGameState(s.gameId).let { s.gameId }
-                    // We need the opponent's UID — grab from latest state value
-                    "" // placeholder; real impl passes shooterUid from game state observation
-                },
+                shooterUid = "", // placeholder; real impl passes shooterUid from game state
                 shotIndex  = index,
                 result     = fireResult
             )
@@ -230,12 +213,10 @@ class OnlineGameViewModel @Inject constructor(
         }
     }
 
-    // ── Cell tapped (fire shot) ───────────────────────────────────────────────
-
+    // ── Cell tapped (fire shot) ────────────────────────────────────────────────
     private fun handleCellTapped(coord: Coord) {
         if (!_uiState.value.isMyTurn) return
         if (_uiState.value.gameStatus != GameStatus.BATTLE) return
-
         viewModelScope.launch {
             val gameId = _uiState.value.gameId
             val result = repository.fireShot(gameId, coord)
@@ -247,16 +228,14 @@ class OnlineGameViewModel @Inject constructor(
         }
     }
 
-    // ── Resign ────────────────────────────────────────────────────────────────
-
+    // ── Resign ─────────────────────────────────────────────────────────────────
     private fun handleResign() {
         viewModelScope.launch {
             _effects.send(UiEffect.NavigateToGameOver(winner = ""))
         }
     }
 
-    // ── Claim victory after disconnect ────────────────────────────────────────
-
+    // ── Claim victory after disconnect ─────────────────────────────────────────
     private fun handleClaimVictory() {
         viewModelScope.launch {
             val gameId = _uiState.value.gameId
@@ -264,14 +243,12 @@ class OnlineGameViewModel @Inject constructor(
         }
     }
 
-    // ── Reconnect ─────────────────────────────────────────────────────────────
-
+    // ── Reconnect ──────────────────────────────────────────────────────────────
     private fun handleReconnect() {
         viewModelScope.launch {
             val gameId = _uiState.value.gameId
             _uiState.update { it.copy(connectionStatus = ConnectionStatus.RECONNECTING) }
             _effects.send(UiEffect.ShowReconnectingOverlay)
-
             withTimeoutOrNull(GameConstants.RECONNECT_TIMEOUT_SECS * 1_000L) {
                 repository.setPresence(gameId, connected = true)
                 _uiState.update { it.copy(connectionStatus = ConnectionStatus.CONNECTED) }
@@ -281,8 +258,7 @@ class OnlineGameViewModel @Inject constructor(
         }
     }
 
-    // ── Disconnect timer ──────────────────────────────────────────────────────
-
+    // ── Disconnect timer ───────────────────────────────────────────────────────
     private fun startDisconnectTimer() {
         disconnectTimerJob?.cancel()
         disconnectTimerJob = viewModelScope.launch {
@@ -305,8 +281,7 @@ class OnlineGameViewModel @Inject constructor(
         _uiState.update { it.copy(opponentDisconnectedSeconds = 0) }
     }
 
-    // ── Cleanup ───────────────────────────────────────────────────────────────
-
+    // ── Cleanup ────────────────────────────────────────────────────────────────
     override fun onCleared() {
         super.onCleared()
         gameObserverJob?.cancel()
