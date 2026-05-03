@@ -1,4 +1,3 @@
-// FILE: app/build.gradle.kts
 plugins {
     id("battleship.android.application")
     alias(libs.plugins.kotlin.serialization)
@@ -43,10 +42,20 @@ dependencies {
     implementation(project(":feature:stats"))
     implementation(project(":feature:settings"))
 
-    // Core modules visible to :app
+    // Core modules — must be explicit so Hilt/KSP can resolve DI provider return types
+    implementation(project(":core:domain"))       // GameEngine (AppModule)
+    implementation(project(":core:data"))         // BattleshipDatabase, GameRepositoryImpl, StatsRepositoryImpl
+    implementation(project(":core:multiplayer"))  // FirebaseMatchRepositoryImpl
     implementation(project(":core:ui"))
     implementation(project(":core:analytics"))
     // :core:ads intentionally excluded until ads phase
+
+    // DataStore — DatabaseModule.provideDataStore() returns DataStore<Preferences> directly
+    implementation(libs.datastore.preferences)
+
+    // Room runtime — BattleshipDatabase extends RoomDatabase; Kotlin needs the supertype
+    // visible when compiling DatabaseModule's DAO provider methods in :app
+    implementation(libs.room.runtime)            // ← ADDED
 
     // Firebase
     implementation(platform(libs.firebase.bom))
@@ -56,6 +65,9 @@ dependencies {
     // Navigation + Activity
     implementation(libs.navigation.compose)
     implementation(libs.activity.compose)
+
+    // Hilt navigation — provides hiltViewModel() used in BattleshipNavHost.kt
+    implementation(libs.hilt.navigation.compose) // ← ADDED
 
     // Serialization — required for @Serializable routes in Routes.kt
     implementation(libs.kotlinx.serialization.json)

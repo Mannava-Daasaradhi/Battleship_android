@@ -1,4 +1,3 @@
-// FILE: app/src/main/kotlin/com/battleship/fleetcommand/di/DatabaseModule.kt
 package com.battleship.fleetcommand.di
 
 import android.content.Context
@@ -6,6 +5,10 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import com.battleship.fleetcommand.core.data.local.BattleshipDatabase
+import com.battleship.fleetcommand.core.data.local.dao.BoardStateDao
+import com.battleship.fleetcommand.core.data.local.dao.GameDao
+import com.battleship.fleetcommand.core.data.local.dao.ShotDao
+import com.battleship.fleetcommand.core.data.local.dao.StatsDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -25,6 +28,22 @@ object DatabaseModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): BattleshipDatabase =
         BattleshipDatabase.create(context)
+
+    @Provides
+    @Singleton
+    fun provideGameDao(db: BattleshipDatabase): GameDao = db.gameDao()
+
+    @Provides
+    @Singleton
+    fun provideShotDao(db: BattleshipDatabase): ShotDao = db.shotDao()
+
+    @Provides
+    @Singleton
+    fun provideStatsDao(db: BattleshipDatabase): StatsDao = db.statsDao()
+
+    @Provides
+    @Singleton
+    fun provideBoardStateDao(db: BattleshipDatabase): BoardStateDao = db.boardStateDao()
 
     @Provides
     @Singleton

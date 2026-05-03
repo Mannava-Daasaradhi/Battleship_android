@@ -205,7 +205,7 @@ class OnlineGameViewModel @Inject constructor(
                     _effects.send(UiEffect.ShowMissAnimation(coord))
                 }
                 FireResult.SUNK -> {
-                    hapticManager.perform(HapticEvent.SUNK)
+                    hapticManager.perform(HapticEvent.SHIP_SUNK)  // ← FIXED: was HapticEvent.SUNK
                     val shipId = (outcome as? ShotOutcome.Sunk)?.shipId
                     if (shipId != null) _effects.send(UiEffect.ShowSunkAnimation(shipId))
                 }
