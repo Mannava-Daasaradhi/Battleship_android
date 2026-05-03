@@ -12,5 +12,6 @@ import kotlinx.serialization.Serializable
 @Serializable object HandOffRoute
 @Serializable object GameOverRoute
 @Serializable object OnlineLobbyRoute
+@Serializable data class WaitingForOpponentRoute(val gameId: String)
 @Serializable object StatisticsRoute
 @Serializable object SettingsRoute
