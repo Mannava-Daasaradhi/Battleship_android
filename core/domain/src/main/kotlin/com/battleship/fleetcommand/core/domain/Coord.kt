@@ -37,8 +37,21 @@ value class Coord(val index: Int) {
     }
 
     companion object {
-        fun fromRowCol(row: Int, col: Int): Coord =
-            Coord(row * GameConstants.BOARD_SIZE + col)
+        /**
+         * Creates a [Coord] from a (row, col) pair.
+         *
+         * FIX: If either dimension is outside [0, BOARD_SIZE), this returns Coord(-1) so that
+         * isValid() correctly returns false. Without this guard, fromRowCol(0, 10) produces
+         * Coord(10) — a perfectly valid index that just wraps to the next row — causing the
+         * PlacementValidator's out-of-bounds check to silently pass for ships that extend past
+         * the right/bottom edge of the grid.
+         */
+        fun fromRowCol(row: Int, col: Int): Coord {
+            if (row !in 0 until GameConstants.BOARD_SIZE || col !in 0 until GameConstants.BOARD_SIZE) {
+                return Coord(-1) // guaranteed invalid — isValid() returns false
+            }
+            return Coord(row * GameConstants.BOARD_SIZE + col)
+        }
 
         fun fromDisplayLabel(label: String): Coord? {
             if (label.length < 2) return null
@@ -50,7 +63,7 @@ value class Coord(val index: Int) {
     }
 }
 
-// ── Zero-allocation iteration helpers ─────────────────────────────────────
+// ── Zero-allocation iteration helpers ─────────────────────────────────────────────
 
 inline fun iterateAllCoords(action: (Coord) -> Unit) {
     var i = 0

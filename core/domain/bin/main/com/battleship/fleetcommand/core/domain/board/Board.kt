@@ -12,12 +12,33 @@ data class Board(
     val ships: List<ShipPlacement> = emptyList()
 ) {
     companion object {
-        /** Board dimension — 10. Use instead of Board.DIMENSION everywhere. */
+        /** Board dimension — 10. Use instead of magic literals everywhere. */
         const val DIMENSION = GameConstants.BOARD_SIZE
         fun empty(): Board = Board()
     }
 
-    fun cellAt(coord: Coord): CellState = CellState.fromOrdinal(cells[coord.index])
+    /**
+     * Returns the [CellState] at [coord].
+     *
+     * FIX: CellState.Ship and CellState.Sunk carry parameters (shipId, orientation) that cannot
+     * be round-tripped through a plain Int ordinal. Ordinal 1 (Ship) and ordinal 4 (Sunk) are
+     * therefore resolved by looking up the ship placement in the [ships] list. The previous
+     * implementation delegated to CellState.fromOrdinal which unconditionally returned Water for
+     * both ordinals, causing withShip / isSunk / toFogOfWar to behave incorrectly.
+     */
+    fun cellAt(coord: Coord): CellState = when (cells[coord.index]) {
+        CellState.Water.ordinal -> CellState.Water
+        1 /* Ship ordinal */    -> shipAt(coord)
+                                       ?.let { CellState.Ship(it.shipId, it.orientation) }
+                                       ?: CellState.Water
+        CellState.Hit.ordinal   -> CellState.Hit
+        CellState.Miss.ordinal  -> CellState.Miss
+        4 /* Sunk ordinal */    -> shipAt(coord)
+                                       ?.let { CellState.Sunk(it.shipId) }
+                                       ?: CellState.Water
+        else                    -> CellState.Water
+    }
+
     fun isHit(coord: Coord): Boolean = cellAt(coord) == CellState.Hit
     fun isMiss(coord: Coord): Boolean = cellAt(coord) == CellState.Miss
     fun isShot(coord: Coord): Boolean = cellAt(coord).let {
@@ -57,17 +78,30 @@ data class Board(
         return coords.all { cellAt(it) == CellState.Hit || cellAt(it) is CellState.Sunk }
     }
 
-    fun allShipsSunk(): Boolean = ships.all { isSunk(it.shipId) }
+    /**
+     * Returns true only when at least one ship has been placed AND every ship is sunk.
+     *
+     * FIX: The previous implementation used ships.all { ... } which returns true vacuously on an
+     * empty list, causing an empty board to incorrectly report allShipsSunk() == true.
+     */
+    fun allShipsSunk(): Boolean = ships.isNotEmpty() && ships.all { isSunk(it.shipId) }
 
     fun shipAt(coord: Coord): ShipPlacement? =
         ships.firstOrNull { placement ->
             placement.occupiedCoords().any { it.index == coord.index }
         }
 
+    /**
+     * Visits every cell on the board.
+     *
+     * FIX: uses cellAt() so Ship/Sunk cells are correctly reconstructed from the ships list,
+     * rather than calling CellState.fromOrdinal() which cannot reconstruct parameterised states.
+     */
     inline fun forEachCell(action: (Coord, CellState) -> Unit) {
         var i = 0
         while (i < GameConstants.BOARD_SIZE * GameConstants.BOARD_SIZE) {
-            action(Coord(i), CellState.fromOrdinal(cells[i]))
+            val coord = Coord(i)
+            action(coord, cellAt(coord))
             i++
         }
     }
@@ -88,10 +122,17 @@ data class Board(
         return count
     }
 
+    /**
+     * Returns a copy of this board with all Ship cells replaced by Water and the ships list
+     * cleared — suitable for sending to the opponent (fog-of-war view).
+     *
+     * FIX: uses cellAt() to detect Ship cells correctly instead of fromOrdinal() which returned
+     * Water for Ship ordinal 1, making the fog-of-war conversion a no-op.
+     */
     fun toFogOfWar(): Board {
         val fogCells = cells.copyOf()
         iterateAllCoords { coord ->
-            if (CellState.fromOrdinal(fogCells[coord.index]) is CellState.Ship) {
+            if (cellAt(coord) is CellState.Ship) {
                 fogCells[coord.index] = CellState.Water.ordinal
             }
         }
