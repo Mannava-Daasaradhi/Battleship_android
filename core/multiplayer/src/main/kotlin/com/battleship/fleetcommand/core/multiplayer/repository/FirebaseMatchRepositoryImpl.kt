@@ -222,12 +222,12 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
     // ── writeShotResult ───────────────────────────────────────────────────────
     // Called by the DEFENDER only. Writes result (and optional shipId) for a shot
     // that was fired at them. shotIndex is the push-key of the shot node.
+   // CORRECT — matches FirebaseMatchRepository interface
     override suspend fun writeShotResult(
         gameId: String,
         shooterUid: String,
-        shotPushKey: String,
-        result: FireResult,
-        shipId: String?
+        shotIndex: Int,
+        result: FireResult
     ) {
         return try {
             val shotRef = database.getReference(

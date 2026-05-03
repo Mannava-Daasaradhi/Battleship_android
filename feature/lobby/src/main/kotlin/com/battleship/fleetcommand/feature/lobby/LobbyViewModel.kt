@@ -68,20 +68,20 @@ class LobbyViewModel @Inject constructor(
 
     fun onEvent(event: LobbyUiEvent) {
         when (event) {
-            is LobbyUiEvent.HostGame                  -> handleHostGame()
-            is LobbyUiEvent.JoinGame                  -> handleJoinGame()
-            is LobbyUiEvent.RoomCodeInputChanged      -> handleRoomCodeInputChanged(event.code)
-            is LobbyUiEvent.ConfirmJoin               -> handleConfirmJoin()
-            is LobbyUiEvent.CancelLobby               -> handleCancelLobby()
+            is LobbyUiEvent.HostGame             -> handleHostGame()
+            is LobbyUiEvent.JoinGame             -> handleJoinGame()
+            is LobbyUiEvent.RoomCodeInputChanged -> handleRoomCodeInputChanged(event.code)
+            is LobbyUiEvent.ConfirmJoin          -> handleConfirmJoin()
+            is LobbyUiEvent.CancelLobby          -> handleCancelLobby()
         }
     }
 
-    // ── HostGame ─────────────────────────────────────────────────────────────
+    // ── HostGame ──────────────────────────────────────────────────────────────
 
     private fun handleHostGame() {
         viewModelScope.launch {
-            val playerName = preferencesRepository.getPlayerName().first()
-                .ifBlank { "Host" }
+            // observePlayerName() returns Flow<String> — take the current value
+            val playerName = preferencesRepository.observePlayerName().first().ifBlank { "Host" }
 
             _uiState.update { it.copy(isLoading = true, error = null, mode = LobbyMode.HOSTING) }
 
@@ -118,7 +118,6 @@ class LobbyViewModel @Inject constructor(
     // ── RoomCodeInputChanged ──────────────────────────────────────────────────
 
     private fun handleRoomCodeInputChanged(code: String) {
-        // Normalise: uppercase, max 6 chars, alphanumeric only
         val normalised = code.uppercase()
             .filter { it.isLetterOrDigit() }
             .take(6)
@@ -137,8 +136,7 @@ class LobbyViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            val playerName = preferencesRepository.getPlayerName().first()
-                .ifBlank { "Guest" }
+            val playerName = preferencesRepository.observePlayerName().first().ifBlank { "Guest" }
 
             _uiState.update { it.copy(isLoading = true, error = null) }
 
@@ -158,8 +156,8 @@ class LobbyViewModel @Inject constructor(
                         _uiState.update { it.copy(isLoading = false, error = msg) }
                         _effects.send(LobbyUiEffect.ShowError(msg))
                     }
-                    is JoinResult.NetworkError -> {
-                        val msg = "Network error. Check your connection."
+                    is JoinResult.Failure -> {
+                        val msg = result.reason.ifBlank { "Network error. Check your connection." }
                         _uiState.update { it.copy(isLoading = false, error = msg) }
                         _effects.send(LobbyUiEffect.ShowError(msg))
                     }
@@ -171,8 +169,6 @@ class LobbyViewModel @Inject constructor(
     // ── CancelLobby ───────────────────────────────────────────────────────────
 
     private fun handleCancelLobby() {
-        _uiState.update {
-            LobbyUiState() // reset to default
-        }
+        _uiState.update { LobbyUiState() }
     }
 }

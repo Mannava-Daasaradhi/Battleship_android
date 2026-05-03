@@ -1,4 +1,8 @@
-plugins { id("battleship.android.library.compose") }
+plugins {
+    id("battleship.android.library.compose")
+    id("com.google.dagger.hilt.android")
+    id("com.google.devtools.ksp")
+}
 
 android { namespace = "com.battleship.fleetcommand.core.ui" }
 
@@ -18,6 +22,9 @@ dependencies {
     implementation(libs.lottie.compose)
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.collections.immutable)
+
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
 
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.ui.test.manifest)

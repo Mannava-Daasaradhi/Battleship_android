@@ -18,4 +18,6 @@ val HitRed            = Color(0xFFFF1744) // Direct hit marker
 val MissWhite         = Color(0xFFE0E0E0) // Miss marker
 val SunkOrange        = Color(0xFFFF6D00) // Sunk ship highlight
 val GridLine          = Color(0xFF1A3A5C) // Grid cell borders
+val ValidGreen        = Color(0xFF00C853) // Valid ship placement highlight
+val InvalidRed        = Color(0xFFD50000) // Invalid ship placement highlight
 val FogOfWar          = Color(0xFF071120) // Unrevealed enemy cells
