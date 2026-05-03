@@ -14,6 +14,7 @@ dependencies {
     implementation(libs.firebase.auth)
     implementation(libs.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.timber)
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
 
