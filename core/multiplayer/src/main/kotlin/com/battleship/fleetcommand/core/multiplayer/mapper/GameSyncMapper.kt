@@ -8,6 +8,7 @@ import com.battleship.fleetcommand.core.domain.multiplayer.PlayerData
 import com.battleship.fleetcommand.core.domain.multiplayer.ShotData
 import com.battleship.fleetcommand.core.multiplayer.FirebaseSchema
 import com.google.firebase.database.DataSnapshot
+import kotlinx.serialization.Serializable
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -154,6 +155,7 @@ internal fun FireResult.toSchemaString(): String = when (this) {
 // ── ShipPlacement DTO for Firebase JSON serialization ─────────────────────────
 // Lives here so :core:multiplayer controls the wire format independently of domain.
 
+@Serializable
 internal data class ShipPlacementDto(
     val shipId: String = "",
     val row: Int = 0,

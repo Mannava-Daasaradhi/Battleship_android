@@ -2,6 +2,7 @@ plugins {
     id("battleship.android.library")
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android { namespace = "com.battleship.fleetcommand.core.multiplayer" }

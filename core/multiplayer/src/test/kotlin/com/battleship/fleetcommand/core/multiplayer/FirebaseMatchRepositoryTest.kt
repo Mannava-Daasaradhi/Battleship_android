@@ -3,8 +3,8 @@
 package com.battleship.fleetcommand.core.multiplayer
 
 import app.cash.turbine.test
-import com.battleship.fleetcommand.core.domain.engine.Coord
-import com.battleship.fleetcommand.core.domain.engine.ShipId
+import com.battleship.fleetcommand.core.domain.Coord
+import com.battleship.fleetcommand.core.domain.ship.ShipId
 import com.battleship.fleetcommand.core.domain.multiplayer.GameCreationResult
 import com.battleship.fleetcommand.core.domain.multiplayer.JoinResult
 import com.battleship.fleetcommand.core.testing.FakeFirebaseDatabase

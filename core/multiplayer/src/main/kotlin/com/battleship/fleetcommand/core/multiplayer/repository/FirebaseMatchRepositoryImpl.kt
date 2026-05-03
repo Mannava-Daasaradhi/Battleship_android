@@ -2,19 +2,21 @@
 
 package com.battleship.fleetcommand.core.multiplayer.repository
 
+import com.battleship.fleetcommand.core.domain.Coord
+import com.battleship.fleetcommand.core.domain.GameConstants
+import com.battleship.fleetcommand.core.domain.Orientation
 import com.battleship.fleetcommand.core.domain.engine.FireResult
-import com.battleship.fleetcommand.core.domain.engine.ShipPlacement
-import com.battleship.fleetcommand.core.domain.engine.Coord
 import com.battleship.fleetcommand.core.domain.multiplayer.FirebaseMatchRepository
 import com.battleship.fleetcommand.core.domain.multiplayer.GameCreationResult
 import com.battleship.fleetcommand.core.domain.multiplayer.JoinResult
 import com.battleship.fleetcommand.core.domain.multiplayer.OnlineGameState
 import com.battleship.fleetcommand.core.domain.multiplayer.ShotData
-import com.battleship.fleetcommand.core.domain.GameConstants
+import com.battleship.fleetcommand.core.domain.ship.ShipPlacement
 import com.battleship.fleetcommand.core.multiplayer.FirebaseSchema
 import com.battleship.fleetcommand.core.multiplayer.auth.FirebaseAuthManager
 import com.battleship.fleetcommand.core.multiplayer.mapper.GameSyncMapper
 import com.battleship.fleetcommand.core.multiplayer.mapper.ShipPlacementDto
+import com.battleship.fleetcommand.core.multiplayer.mapper.toSchemaString
 import com.battleship.fleetcommand.core.multiplayer.matchmaking.MatchmakingRepository
 import com.google.firebase.database.ChildEventListener
 import com.google.firebase.database.DataSnapshot
@@ -59,7 +61,7 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
             close(IllegalStateException("Not authenticated"))
             return@callbackFlow
         }
-        val gameRef = database.getReference("${FirebaseSchema.GAMES_ROOT}/$gameId")
+        val gameRef = database.getReference("${FirebaseSchema.GAMES}/$gameId")
 
         val listener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
@@ -82,7 +84,7 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
     }
 
     // ── submitShipPlacement ───────────────────────────────────────────────────
-    // Serialises List<ShipPlacement> → List<ShipPlacementDto> → JSON string.
+    // Serialises List<ShipPlacement> -> List<ShipPlacementDto> -> JSON string.
     // ShipPlacement and Coord are NOT @Serializable so we map to DTO first.
     override suspend fun submitShipPlacement(
         gameId: String,
@@ -97,15 +99,15 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
                     shipId      = placement.shipId.name,
                     row         = placement.headCoord.rowOf(),
                     col         = placement.headCoord.colOf(),
-                    orientation = if (placement.orientation is com.battleship.fleetcommand.core.domain.engine.Orientation.Horizontal) "H" else "V"
+                    orientation = if (placement.orientation is Orientation.Horizontal) "H" else "V"
                 )
             }
             val shipsJson = Json.encodeToString(dtos)
 
-            val gameRef = database.getReference("${FirebaseSchema.GAMES_ROOT}/$gameId")
-            gameRef.child("${FirebaseSchema.BOARDS}/$myUid/${FirebaseSchema.SHIPS}")
+            val gameRef = database.getReference("${FirebaseSchema.GAMES}/$gameId")
+            gameRef.child("${FirebaseSchema.BOARDS}/$myUid/${FirebaseSchema.BOARD_SHIPS}")
                 .setValue(shipsJson).await()
-            gameRef.child("${FirebaseSchema.PLAYERS}/$myUid/${FirebaseSchema.READY}")
+            gameRef.child("${FirebaseSchema.PLAYERS}/$myUid/${FirebaseSchema.PLAYER_READY}")
                 .setValue(true).await()
 
             Timber.d("FirebaseMatchRepositoryImpl: submitShipPlacement success gameId=$gameId uid=$myUid")
@@ -129,13 +131,13 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
 
         return try {
             val shotData = mapOf(
-                FirebaseSchema.ROW       to coord.rowOf(),
-                FirebaseSchema.COL       to coord.colOf(),
-                FirebaseSchema.RESULT    to null,
-                FirebaseSchema.SHIP_ID   to null,
-                FirebaseSchema.TIMESTAMP to ServerValue.TIMESTAMP
+                FirebaseSchema.SHOT_ROW       to coord.rowOf(),
+                FirebaseSchema.SHOT_COL       to coord.colOf(),
+                FirebaseSchema.SHOT_RESULT    to null,
+                FirebaseSchema.SHOT_SHIP_ID   to null,
+                FirebaseSchema.SHOT_TIMESTAMP to ServerValue.TIMESTAMP
             )
-            database.getReference("${FirebaseSchema.GAMES_ROOT}/$gameId/${FirebaseSchema.SHOTS}/$myUid")
+            database.getReference("${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.SHOTS}/$myUid")
                 .push()
                 .setValue(shotData)
                 .await()
@@ -149,28 +151,40 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
     }
 
     // ── observeOpponentShots ──────────────────────────────────────────────────
-    // Listens to shots/ node; emits ShotData for shots fired by any uid != myUid.
-    override fun observeOpponentShots(gameId: String): Flow<ShotData> = callbackFlow {
+    // Listens to shots/ node; accumulates and emits List<ShotData> whenever a
+    // new shot from the opponent arrives (onChildAdded per shooter uid node).
+    override fun observeOpponentShots(gameId: String): Flow<List<ShotData>> = callbackFlow {
         val myUid = authManager.currentUid ?: run {
             close(IllegalStateException("Not authenticated"))
             return@callbackFlow
         }
         val shotsRef = database.getReference(
-            "${FirebaseSchema.GAMES_ROOT}/$gameId/${FirebaseSchema.SHOTS}"
+            "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.SHOTS}"
         )
+
+        val accumulated = mutableListOf<ShotData>()
 
         val listener = object : ChildEventListener {
             override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
                 val shooterUid = snapshot.key ?: return
-                if (shooterUid == myUid) return // ignore my own shots
+                if (shooterUid == myUid) return
                 snapshot.children.forEach { shotSnapshot ->
                     val shot = mapper.mapShotSnapshot(shotSnapshot)
-                    if (shot != null) trySend(shot)
+                    if (shot != null) accumulated.add(shot)
                 }
+                trySend(accumulated.toList())
             }
 
             override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {
-                // result updates — no re-emit needed; state flow handles this
+                val shooterUid = snapshot.key ?: return
+                if (shooterUid == myUid) return
+                // Rebuild this shooter's shots from scratch to pick up result writes
+                accumulated.removeAll { true } // clear and re-add from snapshot
+                snapshot.children.forEach { shotSnapshot ->
+                    val shot = mapper.mapShotSnapshot(shotSnapshot)
+                    if (shot != null) accumulated.add(shot)
+                }
+                trySend(accumulated.toList())
             }
 
             override fun onCancelled(error: DatabaseError) {
@@ -189,12 +203,12 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
     // ── setPresence ───────────────────────────────────────────────────────────
     override suspend fun setPresence(gameId: String, connected: Boolean) {
         val myUid = authManager.currentUid ?: return
-        return try {
+        try {
             val playerRef = database.getReference(
-                "${FirebaseSchema.GAMES_ROOT}/$gameId/${FirebaseSchema.PLAYERS}/$myUid"
+                "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.PLAYERS}/$myUid"
             )
-            playerRef.child(FirebaseSchema.CONNECTED).setValue(connected).await()
-            playerRef.child(FirebaseSchema.LAST_SEEN).setValue(ServerValue.TIMESTAMP).await()
+            playerRef.child(FirebaseSchema.PLAYER_CONNECTED).setValue(connected).await()
+            playerRef.child(FirebaseSchema.PLAYER_LAST_SEEN).setValue(ServerValue.TIMESTAMP).await()
             Timber.d("FirebaseMatchRepositoryImpl: setPresence gameId=$gameId connected=$connected")
         } catch (e: Exception) {
             Timber.e(e, "FirebaseMatchRepositoryImpl: setPresence failed")
@@ -207,7 +221,7 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
             ?: return Result.failure(Exception("Not authenticated"))
         return try {
             val metaRef = database.getReference(
-                "${FirebaseSchema.GAMES_ROOT}/$gameId/${FirebaseSchema.META}"
+                "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.META}"
             )
             metaRef.child(FirebaseSchema.WINNER).setValue(myUid).await()
             metaRef.child(FirebaseSchema.STATUS).setValue(FirebaseSchema.STATUS_FINISHED).await()
@@ -220,34 +234,32 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
     }
 
     // ── writeShotResult ───────────────────────────────────────────────────────
-    // Called by the DEFENDER only. Writes result (and optional shipId) for a shot
-    // that was fired at them. shotIndex is the push-key of the shot node.
-   // CORRECT — matches FirebaseMatchRepository interface
+    // Called by the DEFENDER only. Writes result to the shot at the given ordinal
+    // index within the shooter's push-key list. Queries children to resolve index
+    // to push-key, then updates the result field.
     override suspend fun writeShotResult(
         gameId: String,
         shooterUid: String,
         shotIndex: Int,
         result: FireResult
     ) {
-        return try {
-            val shotRef = database.getReference(
-                "${FirebaseSchema.GAMES_ROOT}/$gameId/${FirebaseSchema.SHOTS}/$shooterUid/$shotPushKey"
+        try {
+            val shotsRef = database.getReference(
+                "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.SHOTS}/$shooterUid"
             )
-            val updates = mutableMapOf<String, Any?>(
-                FirebaseSchema.RESULT to result.toSchemaString()
-            )
-            if (shipId != null) updates[FirebaseSchema.SHIP_ID] = shipId
-            shotRef.updateChildren(updates).await()
-            Timber.d("FirebaseMatchRepositoryImpl: writeShotResult shooterUid=$shooterUid key=$shotPushKey result=$result")
+            val snapshot = shotsRef.get().await()
+            val pushKey = snapshot.children.elementAtOrNull(shotIndex)?.key
+                ?: run {
+                    Timber.w("FirebaseMatchRepositoryImpl: writeShotResult — no shot at index=$shotIndex for shooter=$shooterUid")
+                    return
+                }
+
+            shotsRef.child(pushKey).child(FirebaseSchema.SHOT_RESULT)
+                .setValue(result.toSchemaString()).await()
+
+            Timber.d("FirebaseMatchRepositoryImpl: writeShotResult shooterUid=$shooterUid index=$shotIndex key=$pushKey result=$result")
         } catch (e: Exception) {
             Timber.e(e, "FirebaseMatchRepositoryImpl: writeShotResult failed")
         }
-    }
-
-    // ── helpers ───────────────────────────────────────────────────────────────
-    private fun FireResult.toSchemaString(): String = when (this) {
-        FireResult.HIT  -> FirebaseSchema.RESULT_HIT
-        FireResult.MISS -> FirebaseSchema.RESULT_MISS
-        FireResult.SUNK -> FirebaseSchema.RESULT_SUNK
     }
 }

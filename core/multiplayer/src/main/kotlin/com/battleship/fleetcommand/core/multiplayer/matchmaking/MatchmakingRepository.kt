@@ -23,7 +23,7 @@ class MatchmakingRepository @Inject constructor(
     suspend fun createGame(playerName: String): GameCreationResult {
         return try {
             val myUid = authManager.ensureAnonymousAuth()
-            val gamesRef = database.getReference(FirebaseSchema.GAMES_ROOT)
+            val gamesRef = database.getReference(FirebaseSchema.GAMES)
             val newGameRef = gamesRef.push()
             val gameId = newGameRef.key ?: return GameCreationResult.Failure("Push key was null")
             val roomCode = RoomCodeGenerator.generate()
@@ -42,17 +42,17 @@ class MatchmakingRepository @Inject constructor(
             newGameRef.child(FirebaseSchema.META).setValue(meta).await()
 
             val playerData = mapOf(
-                FirebaseSchema.NAME       to playerName,
-                FirebaseSchema.READY      to false,
-                FirebaseSchema.CONNECTED  to true,
-                FirebaseSchema.LAST_SEEN  to ServerValue.TIMESTAMP
+                FirebaseSchema.PLAYER_NAME      to playerName,
+                FirebaseSchema.PLAYER_READY     to false,
+                FirebaseSchema.PLAYER_CONNECTED to true,
+                FirebaseSchema.PLAYER_LAST_SEEN to ServerValue.TIMESTAMP
             )
             newGameRef.child("${FirebaseSchema.PLAYERS}/$myUid").setValue(playerData).await()
 
             // Presence: server sets connected=false and stamps lastSeen on disconnect
-            newGameRef.child("${FirebaseSchema.PLAYERS}/$myUid/${FirebaseSchema.CONNECTED}")
+            newGameRef.child("${FirebaseSchema.PLAYERS}/$myUid/${FirebaseSchema.PLAYER_CONNECTED}")
                 .onDisconnect().setValue(false)
-            newGameRef.child("${FirebaseSchema.PLAYERS}/$myUid/${FirebaseSchema.LAST_SEEN}")
+            newGameRef.child("${FirebaseSchema.PLAYERS}/$myUid/${FirebaseSchema.PLAYER_LAST_SEEN}")
                 .onDisconnect().setValue(ServerValue.TIMESTAMP)
 
             Timber.d("MatchmakingRepository: createGame success gameId=$gameId roomCode=$roomCode")
@@ -70,7 +70,7 @@ class MatchmakingRepository @Inject constructor(
             val myUid = authManager.ensureAnonymousAuth()
             val normalised = roomCode.uppercase().trim()
 
-            val snapshot = database.getReference(FirebaseSchema.GAMES_ROOT)
+            val snapshot = database.getReference(FirebaseSchema.GAMES)
                 .orderByChild("${FirebaseSchema.META}/${FirebaseSchema.ROOM_CODE}")
                 .equalTo(normalised)
                 .limitToFirst(1)
@@ -92,29 +92,29 @@ class MatchmakingRepository @Inject constructor(
                 return JoinResult.GameAlreadyStarted
             }
 
-            val gameRef = database.getReference("${FirebaseSchema.GAMES_ROOT}/$gameId")
+            val gameRef = database.getReference("${FirebaseSchema.GAMES}/$gameId")
 
             // Write guestUid into meta
             gameRef.child("${FirebaseSchema.META}/${FirebaseSchema.GUEST_UID}").setValue(myUid).await()
 
             val playerData = mapOf(
-                FirebaseSchema.NAME      to playerName,
-                FirebaseSchema.READY     to false,
-                FirebaseSchema.CONNECTED to true,
-                FirebaseSchema.LAST_SEEN to ServerValue.TIMESTAMP
+                FirebaseSchema.PLAYER_NAME      to playerName,
+                FirebaseSchema.PLAYER_READY     to false,
+                FirebaseSchema.PLAYER_CONNECTED to true,
+                FirebaseSchema.PLAYER_LAST_SEEN to ServerValue.TIMESTAMP
             )
             gameRef.child("${FirebaseSchema.PLAYERS}/$myUid").setValue(playerData).await()
 
-            gameRef.child("${FirebaseSchema.PLAYERS}/$myUid/${FirebaseSchema.CONNECTED}")
+            gameRef.child("${FirebaseSchema.PLAYERS}/$myUid/${FirebaseSchema.PLAYER_CONNECTED}")
                 .onDisconnect().setValue(false)
-            gameRef.child("${FirebaseSchema.PLAYERS}/$myUid/${FirebaseSchema.LAST_SEEN}")
+            gameRef.child("${FirebaseSchema.PLAYERS}/$myUid/${FirebaseSchema.PLAYER_LAST_SEEN}")
                 .onDisconnect().setValue(ServerValue.TIMESTAMP)
 
             Timber.d("MatchmakingRepository: joinGame success gameId=$gameId")
             JoinResult.Success(gameId = gameId)
         } catch (e: Exception) {
             Timber.e(e, "MatchmakingRepository: joinGame failed")
-            JoinResult.NetworkError
+            JoinResult.Failure(e.message ?: "Unknown error")
         }
     }
 }
