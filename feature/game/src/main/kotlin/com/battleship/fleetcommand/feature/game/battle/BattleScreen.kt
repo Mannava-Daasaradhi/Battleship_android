@@ -16,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -28,6 +29,7 @@ import com.battleship.fleetcommand.core.ui.model.CellViewState
 import com.battleship.fleetcommand.core.ui.theme.NavyBackground
 import com.battleship.fleetcommand.core.ui.theme.NavySurface
 import com.battleship.fleetcommand.navigation.GameOverRoute
+import com.battleship.fleetcommand.navigation.HandOffRoute
 import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,6 +42,22 @@ fun BattleScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showResignDialog by remember { mutableStateOf(false) }
 
+    // Pass & Play: observe saved state set by HandOffScreen when returning to this screen
+    val passAndPlayResumeP1 = navController.currentBackStackEntry
+        ?.savedStateHandle
+        ?.getStateFlow<Boolean?>("passAndPlayResumeP1", null)
+        ?.collectAsState()
+    LaunchedEffect(passAndPlayResumeP1?.value) {
+        val resumeP1 = passAndPlayResumeP1?.value ?: return@LaunchedEffect
+        // Clear the key so it doesn't fire again on recomposition
+        navController.currentBackStackEntry?.savedStateHandle?.remove<Boolean>("passAndPlayResumeP1")
+        if (resumeP1) {
+            viewModel.onEvent(BattleViewModel.UiEvent.PassAndPlayResumeP1Turn)
+        } else {
+            viewModel.onEvent(BattleViewModel.UiEvent.PassAndPlayResumeP2Turn)
+        }
+    }
+
     // Section 12 BackHandler — shows resign dialog
     BackHandler { viewModel.onEvent(BattleViewModel.UiEvent.ResignGame) }
 
@@ -48,8 +66,18 @@ fun BattleScreen(
             when (effect) {
                 is BattleViewModel.UiEffect.NavigateToGameOver ->
                     navController.navigate(GameOverRoute(gameId = effect.gameId, winner = effect.winner)) {
-                        popUpTo(navController.graph.startDestinationId) { inclusive = false }
+                        popUpTo<com.battleship.fleetcommand.navigation.MainMenuRoute> { inclusive = false }
                     }
+                is BattleViewModel.UiEffect.NavigateToPassAndPlayHandOff -> {
+                    // Navigate to HandOff; on return the resumed player's turn begins via onEvent
+                    navController.navigate(
+                        HandOffRoute(
+                            gameId = effect.gameId,
+                            mode = "LOCAL",
+                            isP1HandOff = effect.isP1Turn,
+                        )
+                    )
+                }
                 BattleViewModel.UiEffect.ShowResignDialog -> showResignDialog = true
                 is BattleViewModel.UiEffect.ShowHitAnimation  -> { }
                 is BattleViewModel.UiEffect.ShowMissAnimation -> { }
@@ -109,7 +137,8 @@ fun BattleScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text("Shots: ${uiState.shotCount}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onBackground)
+                Text("Your shots: ${uiState.shotCount}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onBackground)
+                Text("${uiState.opponentName}: ${uiState.aiShotCount}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onBackground)
                 Text("Hits: ${uiState.hitCount}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onBackground)
             }
             Text(
@@ -122,6 +151,8 @@ fun BattleScreen(
                     board = uiState.opponentBoard,
                     showShips = false,
                     onCellTapped = { cell: CellViewState ->
+                        // ViewModel has the authoritative synchronous guard (isProcessingShot).
+                        // UI guard here is a best-effort pre-filter only.
                         if (uiState.isMyTurn && !uiState.isAnimating) {
                             viewModel.onEvent(BattleViewModel.UiEvent.CellTapped(cell.coord))
                         }

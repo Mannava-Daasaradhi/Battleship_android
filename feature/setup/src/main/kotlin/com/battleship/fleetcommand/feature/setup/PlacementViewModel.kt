@@ -59,11 +59,20 @@ class PlacementViewModel @Inject constructor(
         val isAutoPlacing: Boolean = false,
         val playerName: String = "Player",
         val mode: GameMode = GameMode.AI,
+        /** Currently selected ship (tap-to-place mode). */
+        val selectedShipId: ShipId? = null,
+        /** Grid coords highlighted during a drag operation. */
+        val hoverCoords: Set<Coord> = emptySet(),
+        /** Whether the current hover position is a valid placement. */
+        val hoverValid: Boolean = false,
     )
 
     sealed class UiEvent {
         data class PlaceShip(val shipId: ShipId, val coord: Coord) : UiEvent()
         data class RotateShip(val shipId: ShipId) : UiEvent()
+        data class SelectShip(val shipId: ShipId) : UiEvent()
+        data class HoverShip(val shipId: ShipId, val coord: Coord) : UiEvent()
+        data object ClearHover : UiEvent()
         data object AutoPlace : UiEvent()
         data object ClearAll : UiEvent()
         data object ConfirmPlacement : UiEvent()
@@ -86,6 +95,9 @@ class PlacementViewModel @Inject constructor(
             when (event) {
                 is UiEvent.PlaceShip       -> placeShip(event.shipId, event.coord)
                 is UiEvent.RotateShip      -> rotateShip(event.shipId)
+                is UiEvent.SelectShip      -> selectShip(event.shipId)
+                is UiEvent.HoverShip       -> hoverShip(event.shipId, event.coord)
+                UiEvent.ClearHover         -> _uiState.update { it.copy(hoverCoords = emptySet(), hoverValid = false) }
                 UiEvent.AutoPlace          -> autoPlace()
                 UiEvent.ClearAll           -> clearAll()
                 UiEvent.ConfirmPlacement   -> confirmPlacement()
@@ -103,7 +115,33 @@ class PlacementViewModel @Inject constructor(
             return
         }
         val newPlacements = existing + newPlacement
-        _uiState.update { it.copy(placements = newPlacements, canConfirm = newPlacements.size == ShipRegistry.ALL.size, board = buildBoard(newPlacements)) }
+        _uiState.update {
+            it.copy(
+                placements = newPlacements,
+                canConfirm = newPlacements.size == ShipRegistry.ALL.size,
+                board = buildBoard(newPlacements),
+                selectedShipId = null,   // deselect after placing
+                hoverCoords = emptySet(),
+                hoverValid = false,
+            )
+        }
+    }
+
+    private fun selectShip(shipId: ShipId) {
+        // Toggle selection — tapping already-selected ship deselects it
+        val current = _uiState.value.selectedShipId
+        _uiState.update {
+            it.copy(selectedShipId = if (current == shipId) null else shipId)
+        }
+    }
+
+    private fun hoverShip(shipId: ShipId, coord: Coord) {
+        val orientation = _uiState.value.orientations[shipId] ?: Orientation.Horizontal
+        val candidate = ShipPlacement(shipId, coord, orientation)
+        val others = _uiState.value.placements.filter { it.shipId != shipId }
+        val isValid = PlacementValidator.validate(candidate, others, AdjacencyMode.RELAXED).isEmpty()
+        val hoverCoords = candidate.occupiedCoords().filter { it.isValid() }.toSet()
+        _uiState.update { it.copy(hoverCoords = hoverCoords, hoverValid = isValid) }
     }
 
     private fun rotateShip(shipId: ShipId) {
@@ -155,7 +193,16 @@ class PlacementViewModel @Inject constructor(
     }
 
     private fun clearAll() {
-        _uiState.update { it.copy(placements = emptyList(), canConfirm = false, board = buildBoard(emptyList())) }
+        _uiState.update {
+            it.copy(
+                placements = emptyList(),
+                canConfirm = false,
+                board = buildBoard(emptyList()),
+                selectedShipId = null,
+                hoverCoords = emptySet(),
+                hoverValid = false,
+            )
+        }
     }
 
     private fun confirmPlacement() {

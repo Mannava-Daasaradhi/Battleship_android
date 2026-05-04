@@ -59,7 +59,7 @@ fun HandOffScreen(
                     val gameId = route.gameId
                     val mode = route.mode
                     if (mode == "LOCAL" && route.isP1HandOff) {
-                        // After P1 handoff: navigate to P2 placement screen
+                        // After P1 initial placement handoff: navigate to P2 placement screen
                         navController.navigate(
                             com.battleship.fleetcommand.navigation.ShipPlacementRoute(
                                 mode = mode,
@@ -67,6 +67,19 @@ fun HandOffScreen(
                                 gameId = gameId,
                             )
                         )
+                    } else if (mode == "LOCAL" && !route.isP1HandOff) {
+                        // During battle hand-off: pop back to BattleScreen and signal whose turn it is.
+                        // isP1HandOff=false during battle means it's about to be P2's turn (isP1Turn=false).
+                        // isP1HandOff=true during battle means it's about to be P1's turn (isP1Turn=true).
+                        // We encode this in the HandOffRoute.isP1HandOff field:
+                        //   isP1HandOff=true  → P1 is about to play  → resume P1 turn
+                        //   isP1HandOff=false → P2 is about to play  → resume P2 turn
+                        // Pop back to BattleScreen (it's already in back stack)
+                        navController.popBackStack()
+                        // BattleScreen will observe this via a saved state handle key
+                        navController.currentBackStackEntry
+                            ?.savedStateHandle
+                            ?.set("passAndPlayResumeP1", route.isP1HandOff)
                     } else {
                         // After P2 handoff (or AI/Online): start the battle
                         navController.navigate(
