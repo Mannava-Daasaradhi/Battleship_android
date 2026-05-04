@@ -1,5 +1,3 @@
-// feature/lobby/src/main/kotlin/com/battleship/fleetcommand/feature/lobby/OnlineLobbyScreen.kt
-
 package com.battleship.fleetcommand.feature.lobby
 
 import androidx.compose.foundation.background
@@ -49,7 +47,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.battleship.fleetcommand.navigation.WaitingForOpponentRoute
 
-// Deep-navy colour palette shared with the rest of the app
 private val NavyDeep   = Color(0xFF050E1A)
 private val NavyMid    = Color(0xFF0A1930)
 private val NavyAccent = Color(0xFF1A4A8A)
@@ -65,12 +62,16 @@ fun OnlineLobbyScreen(
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    // Collect one-shot effects
     LaunchedEffect(Unit) {
         viewModel.effects.collect { effect ->
             when (effect) {
                 is LobbyUiEffect.NavigateToWaiting -> {
-                    navController.navigate(WaitingForOpponentRoute(effect.gameId))
+                    navController.navigate(
+                        WaitingForOpponentRoute(
+                            gameId   = effect.gameId,
+                            roomCode = effect.roomCode   // now forwarded
+                        )
+                    )
                 }
                 is LobbyUiEffect.ShowError -> {
                     snackbarHostState.showSnackbar(effect.message)
@@ -83,9 +84,9 @@ fun OnlineLobbyScreen(
         snackbarHost = {
             SnackbarHost(snackbarHostState) { data ->
                 Snackbar(
-                    snackbarData    = data,
-                    containerColor  = NavyAccent,
-                    contentColor    = TextWhite
+                    snackbarData   = data,
+                    containerColor = NavyAccent,
+                    contentColor   = TextWhite
                 )
             }
         },
@@ -94,11 +95,7 @@ fun OnlineLobbyScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(NavyDeep, NavyMid)
-                    )
-                )
+                .background(Brush.verticalGradient(colors = listOf(NavyDeep, NavyMid)))
                 .padding(paddingValues)
         ) {
             Column(
@@ -108,12 +105,11 @@ fun OnlineLobbyScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                // ── Title ─────────────────────────────────────────────────────
                 Text(
-                    text       = "⚓  ONLINE BATTLE",
-                    color      = GoldAccent,
-                    fontSize   = 26.sp,
-                    fontWeight = FontWeight.Bold,
+                    text          = "⚓  ONLINE BATTLE",
+                    color         = GoldAccent,
+                    fontSize      = 26.sp,
+                    fontWeight    = FontWeight.Bold,
                     letterSpacing = 2.sp
                 )
 
@@ -131,8 +127,8 @@ fun OnlineLobbyScreen(
                         onCancel  = { viewModel.onEvent(LobbyUiEvent.CancelLobby) }
                     )
                     LobbyMode.JOINING -> JoiningPanel(
-                        codeInput = uiState.roomCodeInput,
-                        isLoading = uiState.isLoading,
+                        codeInput    = uiState.roomCodeInput,
+                        isLoading    = uiState.isLoading,
                         onCodeChange = { viewModel.onEvent(LobbyUiEvent.RoomCodeInputChanged(it)) },
                         onConfirm    = { viewModel.onEvent(LobbyUiEvent.ConfirmJoin) },
                         onCancel     = { viewModel.onEvent(LobbyUiEvent.CancelLobby) }
@@ -143,14 +139,10 @@ fun OnlineLobbyScreen(
     }
 }
 
-// ── Choose panel ─────────────────────────────────────────────────────────────
+// ── Choose panel ──────────────────────────────────────────────────────────────
 
 @Composable
-private fun ChoosePanel(
-    isLoading: Boolean,
-    onHost: () -> Unit,
-    onJoin: () -> Unit
-) {
+private fun ChoosePanel(isLoading: Boolean, onHost: () -> Unit, onJoin: () -> Unit) {
     Column(
         modifier            = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -159,16 +151,8 @@ private fun ChoosePanel(
         if (isLoading) {
             CircularProgressIndicator(color = GoldAccent)
         } else {
-            LobbyButton(
-                text    = "HOST GAME",
-                onClick = onHost,
-                primary = true
-            )
-            LobbyButton(
-                text    = "JOIN GAME",
-                onClick = onJoin,
-                primary = false
-            )
+            LobbyButton(text = "HOST GAME", onClick = onHost, primary = true)
+            LobbyButton(text = "JOIN GAME", onClick = onJoin, primary = false)
         }
     }
 }
@@ -176,11 +160,7 @@ private fun ChoosePanel(
 // ── Hosting panel ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun HostingPanel(
-    roomCode: String,
-    isLoading: Boolean,
-    onCancel: () -> Unit
-) {
+private fun HostingPanel(roomCode: String, isLoading: Boolean, onCancel: () -> Unit) {
     Column(
         modifier            = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -188,34 +168,25 @@ private fun HostingPanel(
     ) {
         if (isLoading || roomCode.isBlank()) {
             CircularProgressIndicator(color = GoldAccent)
-            Text(
-                text     = "Creating game…",
-                color    = TextMuted,
-                fontSize = 14.sp
-            )
+            Text(text = "Creating game…", color = TextMuted, fontSize = 14.sp)
         } else {
             RoomCodeDisplay(code = roomCode)
-
             Text(
                 text      = "Share this code with your opponent",
                 color     = TextMuted,
                 fontSize  = 13.sp,
                 textAlign = TextAlign.Center
             )
-
             Text(
                 text      = "Waiting for opponent to join…",
                 color     = TextWhite,
                 fontSize  = 15.sp,
                 textAlign = TextAlign.Center
             )
-
             OutlinedButton(
                 onClick = onCancel,
                 colors  = ButtonDefaults.outlinedButtonColors(contentColor = TextMuted)
-            ) {
-                Text("CANCEL")
-            }
+            ) { Text("CANCEL") }
         }
     }
 }
@@ -235,11 +206,7 @@ private fun JoiningPanel(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text     = "Enter the 6-character room code",
-            color    = TextWhite,
-            fontSize = 15.sp
-        )
+        Text(text = "Enter the 6-character room code", color = TextWhite, fontSize = 15.sp)
 
         OutlinedTextField(
             value         = codeInput,
@@ -254,11 +221,11 @@ private fun JoiningPanel(
             ),
             keyboardActions = KeyboardActions(onGo = { onConfirm() }),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor    = TextWhite,
-                unfocusedTextColor  = TextWhite,
-                focusedBorderColor  = GoldAccent,
+                focusedTextColor     = TextWhite,
+                unfocusedTextColor   = TextWhite,
+                focusedBorderColor   = GoldAccent,
                 unfocusedBorderColor = NavyAccent,
-                cursorColor         = GoldAccent
+                cursorColor          = GoldAccent
             ),
             modifier = Modifier.fillMaxWidth()
         )
@@ -266,57 +233,41 @@ private fun JoiningPanel(
         if (isLoading) {
             CircularProgressIndicator(color = GoldAccent)
         } else {
-            Row(
-                modifier            = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedButton(
                     onClick  = onCancel,
                     modifier = Modifier.weight(1f),
                     colors   = ButtonDefaults.outlinedButtonColors(contentColor = TextMuted)
-                ) {
-                    Text("BACK")
-                }
-
+                ) { Text("BACK") }
                 Button(
                     onClick  = onConfirm,
                     enabled  = codeInput.length == 6,
                     modifier = Modifier.weight(1f),
-                    colors   = ButtonDefaults.buttonColors(
-                        containerColor = GoldAccent,
-                        contentColor   = NavyDeep
-                    )
-                ) {
-                    Text("JOIN", fontWeight = FontWeight.Bold)
-                }
+                    colors   = ButtonDefaults.buttonColors(containerColor = GoldAccent, contentColor = NavyDeep)
+                ) { Text("JOIN", fontWeight = FontWeight.Bold) }
             }
         }
     }
 }
 
-// ── Room code display ─────────────────────────────────────────────────────────
+// ── Room code display (host lobby) ────────────────────────────────────────────
 
 @Composable
 private fun RoomCodeDisplay(code: String) {
     Box(
-        modifier            = Modifier
+        modifier         = Modifier
             .fillMaxWidth()
             .background(NavyAccent.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
             .padding(vertical = 20.dp, horizontal = 16.dp),
-        contentAlignment    = Alignment.Center
+        contentAlignment = Alignment.Center
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text     = "ROOM CODE",
-                color    = TextMuted,
-                fontSize = 11.sp,
-                letterSpacing = 2.sp
-            )
+            Text(text = "ROOM CODE", color = TextMuted, fontSize = 11.sp, letterSpacing = 2.sp)
             Spacer(modifier = Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 code.forEach { char ->
                     Box(
-                        modifier = Modifier
+                        modifier         = Modifier
                             .size(width = 38.dp, height = 48.dp)
                             .background(NavyDeep, RoundedCornerShape(6.dp)),
                         contentAlignment = Alignment.Center
@@ -337,35 +288,20 @@ private fun RoomCodeDisplay(code: String) {
 // ── Shared button ─────────────────────────────────────────────────────────────
 
 @Composable
-private fun LobbyButton(
-    text: String,
-    onClick: () -> Unit,
-    primary: Boolean
-) {
+private fun LobbyButton(text: String, onClick: () -> Unit, primary: Boolean) {
     if (primary) {
         Button(
             onClick  = onClick,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            shape  = RoundedCornerShape(10.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = GoldAccent,
-                contentColor   = NavyDeep
-            )
-        ) {
-            Text(text = text, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-        }
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape    = RoundedCornerShape(10.dp),
+            colors   = ButtonDefaults.buttonColors(containerColor = GoldAccent, contentColor = NavyDeep)
+        ) { Text(text = text, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp) }
     } else {
         OutlinedButton(
             onClick  = onClick,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp),
-            shape  = RoundedCornerShape(10.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextWhite)
-        ) {
-            Text(text = text, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
-        }
+            modifier = Modifier.fillMaxWidth().height(52.dp),
+            shape    = RoundedCornerShape(10.dp),
+            colors   = ButtonDefaults.outlinedButtonColors(contentColor = TextWhite)
+        ) { Text(text = text, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp) }
     }
 }

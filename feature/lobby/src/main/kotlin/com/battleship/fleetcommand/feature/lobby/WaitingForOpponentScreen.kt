@@ -1,5 +1,3 @@
-// feature/lobby/src/main/kotlin/com/battleship/fleetcommand/feature/lobby/WaitingForOpponentScreen.kt
-
 package com.battleship.fleetcommand.feature.lobby
 
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -19,9 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
@@ -44,29 +40,28 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.battleship.fleetcommand.navigation.ShipPlacementRoute
 
-private val NavyDeep   = Color(0xFF050E1A)
-private val NavyMid    = Color(0xFF0A1930)
-private val NavyAccent = Color(0xFF1A4A8A)
-private val GoldAccent = Color(0xFFD4AF37)
-private val TextWhite  = Color(0xFFF0F4FF)
-private val TextMuted  = Color(0xFF8090B0)
-private val ShimmerBase    = Color(0xFF112240)
+private val NavyDeep         = Color(0xFF050E1A)
+private val NavyMid          = Color(0xFF0A1930)
+private val NavyAccent       = Color(0xFF1A4A8A)
+private val GoldAccent       = Color(0xFFD4AF37)
+private val TextWhite        = Color(0xFFF0F4FF)
+private val TextMuted        = Color(0xFF8090B0)
+private val ShimmerBase      = Color(0xFF112240)
 private val ShimmerHighlight = Color(0xFF1E3A6E)
 
 @Composable
 fun WaitingForOpponentScreen(
     gameId: String,
+    roomCode: String,                            // host's code to display; empty for guest
     navController: NavController,
     viewModel: WaitingForOpponentViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    // Initialise with gameId on first composition
     LaunchedEffect(gameId) {
         viewModel.init(gameId)
     }
 
-    // Navigate when both players are ready (status advances to "battle")
     LaunchedEffect(uiState.bothReady) {
         if (uiState.bothReady) {
             navController.navigate(ShipPlacementRoute(mode = "ONLINE", gameId = gameId)) {
@@ -87,19 +82,54 @@ fun WaitingForOpponentScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // ── Title ─────────────────────────────────────────────────────────
             Text(
-                text       = "⚓  BATTLE STATION",
-                color      = GoldAccent,
-                fontSize   = 22.sp,
-                fontWeight = FontWeight.Bold,
+                text          = "⚓  BATTLE STATION",
+                color         = GoldAccent,
+                fontSize      = 22.sp,
+                fontWeight    = FontWeight.Bold,
                 letterSpacing = 2.sp
             )
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(32.dp))
 
+            // ── Room code block — only shown to the host ──────────────────────
+            if (roomCode.isNotBlank()) {
+                Text(
+                    text          = "ROOM CODE",
+                    color         = TextMuted,
+                    fontSize      = 11.sp,
+                    letterSpacing = 2.sp
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    roomCode.forEach { char ->
+                        Box(
+                            modifier         = Modifier
+                                .size(width = 42.dp, height = 52.dp)
+                                .background(NavyAccent.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text       = char.toString(),
+                                color      = GoldAccent,
+                                fontSize   = 24.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text      = "Share this code with your opponent",
+                    color     = TextMuted,
+                    fontSize  = 12.sp,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(32.dp))
+            }
+
+            // ── Status area ───────────────────────────────────────────────────
             if (!uiState.opponentConnected) {
-                // ── Shimmer placeholder rows ─────────────────────────────────
                 Text(
                     text      = "Waiting for opponent…",
                     color     = TextMuted,
@@ -113,26 +143,25 @@ fun WaitingForOpponentScreen(
                 }
                 Spacer(modifier = Modifier.height(24.dp))
                 CircularProgressIndicator(
-                    color  = NavyAccent,
-                    modifier = Modifier.size(32.dp),
+                    color       = NavyAccent,
+                    modifier    = Modifier.size(32.dp),
                     strokeWidth = 3.dp
                 )
             } else {
-                // ── Opponent connected ────────────────────────────────────────
                 Text(
-                    text      = "Opponent connected!",
-                    color     = Color(0xFF4CAF50),
-                    fontSize  = 16.sp,
+                    text       = "Opponent connected!",
+                    color      = Color(0xFF4CAF50),
+                    fontSize   = 16.sp,
                     fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center
+                    textAlign  = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text      = uiState.opponentName,
-                    color     = TextWhite,
-                    fontSize  = 24.sp,
+                    text       = uiState.opponentName,
+                    color      = TextWhite,
+                    fontSize   = 24.sp,
                     fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
+                    textAlign  = TextAlign.Center
                 )
                 Spacer(modifier = Modifier.height(24.dp))
                 Text(
@@ -143,8 +172,8 @@ fun WaitingForOpponentScreen(
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 CircularProgressIndicator(
-                    color  = GoldAccent,
-                    modifier = Modifier.size(36.dp),
+                    color       = GoldAccent,
+                    modifier    = Modifier.size(36.dp),
                     strokeWidth = 3.dp
                 )
             }
@@ -154,9 +183,7 @@ fun WaitingForOpponentScreen(
             OutlinedButton(
                 onClick = { navController.popBackStack() },
                 colors  = ButtonDefaults.outlinedButtonColors(contentColor = TextMuted)
-            ) {
-                Text("CANCEL")
-            }
+            ) { Text("CANCEL") }
         }
     }
 }
@@ -167,25 +194,20 @@ fun WaitingForOpponentScreen(
 private fun ShimmerRow() {
     val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
     val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.3f,
-        targetValue  = 0.7f,
+        initialValue  = 0.3f,
+        targetValue   = 0.7f,
         animationSpec = infiniteRepeatable(
             animation  = tween(900, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "shimmerAlpha"
     )
-
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(24.dp)
             .alpha(alpha)
             .clip(RoundedCornerShape(6.dp))
-            .background(
-                Brush.horizontalGradient(
-                    listOf(ShimmerBase, ShimmerHighlight, ShimmerBase)
-                )
-            )
+            .background(Brush.horizontalGradient(listOf(ShimmerBase, ShimmerHighlight, ShimmerBase)))
     )
 }

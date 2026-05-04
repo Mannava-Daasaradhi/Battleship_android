@@ -1,5 +1,3 @@
-// feature/lobby/src/main/kotlin/com/battleship/fleetcommand/feature/lobby/LobbyViewModel.kt
-
 package com.battleship.fleetcommand.feature.lobby
 
 import androidx.lifecycle.ViewModel
@@ -13,6 +11,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
@@ -48,7 +47,8 @@ sealed class LobbyUiEvent {
 // ── UiEffect ──────────────────────────────────────────────────────────────────
 
 sealed class LobbyUiEffect {
-    data class NavigateToWaiting(val gameId: String) : LobbyUiEffect()
+    // roomCode added — waiting screen needs it to display to the host
+    data class NavigateToWaiting(val gameId: String, val roomCode: String) : LobbyUiEffect()
     data class ShowError(val message: String) : LobbyUiEffect()
 }
 
@@ -101,7 +101,13 @@ class LobbyViewModel @Inject constructor(
                                     hostName  = playerName
                                 )
                             }
-                            _effects.send(LobbyUiEffect.NavigateToWaiting(result.gameId))
+                            // Pass roomCode so WaitingForOpponentScreen can display it
+                            _effects.send(
+                                LobbyUiEffect.NavigateToWaiting(
+                                    gameId   = result.gameId,
+                                    roomCode = result.roomCode
+                                )
+                            )
                         }
                         is GameCreationResult.Failure -> {
                             Timber.e("LobbyViewModel: createGame failed reason=${result.reason}")
@@ -157,7 +163,13 @@ class LobbyViewModel @Inject constructor(
                     when (result) {
                         is JoinResult.Success -> {
                             _uiState.update { it.copy(isLoading = false, guestName = playerName) }
-                            _effects.send(LobbyUiEffect.NavigateToWaiting(result.gameId))
+                            // Guest doesn't need to show the room code — pass empty string
+                            _effects.send(
+                                LobbyUiEffect.NavigateToWaiting(
+                                    gameId   = result.gameId,
+                                    roomCode = ""
+                                )
+                            )
                         }
                         is JoinResult.NotFound -> {
                             val msg = "Room code not found. Check the code and try again."
