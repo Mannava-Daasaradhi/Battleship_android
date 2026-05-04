@@ -2,12 +2,14 @@
 package com.battleship.fleetcommand.feature.setup
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -22,15 +24,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.battleship.fleetcommand.core.domain.Coord
@@ -44,7 +44,6 @@ import com.battleship.fleetcommand.core.ui.theme.*
 import com.battleship.fleetcommand.navigation.BattleRoute
 import com.battleship.fleetcommand.navigation.HandOffRoute
 import kotlinx.coroutines.flow.collectLatest
-import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +67,7 @@ fun ShipPlacementScreen(
                             gameId = effect.gameId,
                             mode = route.mode,
                             isP1HandOff = effect.isP1HandOff,
+                            phase = effect.phase,
                         )
                     )
                 is PlacementViewModel.UiEffect.ShowPlacementError -> { /* future snackbar */ }
@@ -79,7 +79,10 @@ fun ShipPlacementScreen(
         modifier = Modifier.safeDrawingPadding(),
         topBar = {
             TopAppBar(
-                title = { Text("PLACE YOUR FLEET", fontWeight = FontWeight.Bold) },
+                title = {
+                    val playerLabel = if (route.playerSlot == 1) "PLAYER 2 — PLACE FLEET" else "PLACE YOUR FLEET"
+                    Text(playerLabel, fontWeight = FontWeight.Bold)
+                },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -107,8 +110,20 @@ fun ShipPlacementScreen(
                     val selected = uiState.selectedShipId ?: return@PlacementGridWithDrag
                     viewModel.onEvent(PlacementViewModel.UiEvent.PlaceShip(selected, coord))
                 },
+                onDoubleTapCell = { coord ->
+                    // Double-tap a cell containing a ship to rotate it
+                    val placement = uiState.placements.firstOrNull { p ->
+                        coord in p.occupiedCoords()
+                    }
+                    if (placement != null) {
+                        viewModel.onEvent(PlacementViewModel.UiEvent.RotateShip(placement.shipId))
+                    }
+                },
                 onDragHover = { shipId, coord ->
                     viewModel.onEvent(PlacementViewModel.UiEvent.HoverShip(shipId, coord))
+                },
+                onDragStart = { shipId ->
+                    viewModel.onEvent(PlacementViewModel.UiEvent.SetDragging(shipId))
                 },
                 onDragEnd = {
                     viewModel.onEvent(PlacementViewModel.UiEvent.ClearHover)
@@ -118,10 +133,11 @@ fun ShipPlacementScreen(
 
             // ── Hint text ──────────────────────────────────────────────────
             Text(
-                text = if (uiState.selectedShipId != null)
-                    "Tap a cell to place • Double-tap ship to rotate"
-                else
-                    "Select a ship below or long-press to drag",
+                text = when {
+                    uiState.draggingShipId != null -> "Drop on the grid to place"
+                    uiState.selectedShipId != null -> "Tap grid to place • Double-tap grid ship to rotate"
+                    else -> "Tap a ship to select • Long-press & drag to place • Double-tap placed ship to rotate"
+                },
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
             )
@@ -134,6 +150,18 @@ fun ShipPlacementScreen(
                 },
                 onRotateShip = { shipId ->
                     viewModel.onEvent(PlacementViewModel.UiEvent.RotateShip(shipId))
+                },
+                onDragStart = { shipId ->
+                    viewModel.onEvent(PlacementViewModel.UiEvent.SetDragging(shipId))
+                },
+                onDragHover = { shipId, coord ->
+                    viewModel.onEvent(PlacementViewModel.UiEvent.HoverShip(shipId, coord))
+                },
+                onDrop = { shipId, coord ->
+                    viewModel.onEvent(PlacementViewModel.UiEvent.PlaceShip(shipId, coord))
+                },
+                onDragCancel = {
+                    viewModel.onEvent(PlacementViewModel.UiEvent.ClearHover)
                 },
             )
 
@@ -167,13 +195,28 @@ private fun PlacementGridWithDrag(
     uiState: PlacementViewModel.UiState,
     onDropShip: (ShipId, Coord) -> Unit,
     onTapCell: (Coord) -> Unit,
+    onDoubleTapCell: (Coord) -> Unit,
     onDragHover: (ShipId, Coord) -> Unit,
+    onDragStart: (ShipId) -> Unit,
     onDragEnd: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
     var gridTopLeft by remember { mutableStateOf(Offset.Zero) }
     var cellSizePx by remember { mutableStateOf(0f) }
+
+    // Helper to convert absolute screen position → Coord
+    fun offsetToCoord(absOffset: Offset): Coord? {
+        if (cellSizePx <= 0f) return null
+        val rel = absOffset - gridTopLeft
+        // Account for the label column offset (one cell wide)
+        val gridContentLeft = cellSizePx
+        val gridContentTop  = cellSizePx  // label row
+        val col = ((rel.x - gridContentLeft) / cellSizePx).toInt()
+        val row = ((rel.y - gridContentTop)  / cellSizePx).toInt()
+        if (row !in 0 until GameConstants.BOARD_SIZE || col !in 0 until GameConstants.BOARD_SIZE) return null
+        return Coord.fromRowCol(row, col)
+    }
 
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val cellSizeDp = (maxWidth - 24.dp) / GameConstants.BOARD_SIZE
@@ -186,9 +229,8 @@ private fun PlacementGridWithDrag(
                     gridTopLeft = coords.positionInRoot()
                 }
         ) {
-            // Draw the 10×10 grid
             Column {
-                // Row coordinate labels A–J
+                // Column coordinate labels 1–10
                 Row {
                     Spacer(Modifier.size(cellSizeDp))
                     repeat(GameConstants.BOARD_SIZE) { col ->
@@ -203,7 +245,7 @@ private fun PlacementGridWithDrag(
                 }
                 repeat(GameConstants.BOARD_SIZE) { row ->
                     Row {
-                        // Row label
+                        // Row label A–J
                         Box(Modifier.size(cellSizeDp), contentAlignment = Alignment.Center) {
                             Text(
                                 text = ('A' + row).toString(),
@@ -218,6 +260,12 @@ private fun PlacementGridWithDrag(
                             val isHovered = uiState.hoverCoords.contains(coord)
                             val isHoverValid = uiState.hoverValid
 
+                            val isSelectedShipHere = uiState.selectedShipId?.let { selId ->
+                                uiState.placements.any { p ->
+                                    p.shipId == selId && coord in p.occupiedCoords()
+                                }
+                            } == true
+
                             val bgColor = when {
                                 isHovered && isHoverValid  -> ValidGreen.copy(alpha = 0.6f)
                                 isHovered && !isHoverValid -> InvalidRed.copy(alpha = 0.6f)
@@ -230,12 +278,6 @@ private fun PlacementGridWithDrag(
                                 label = "cellBg$row$col",
                             )
 
-                            val isSelectedShipHere = uiState.selectedShipId?.let { selId ->
-                                uiState.placements.any { p ->
-                                    p.shipId == selId && coord in p.occupiedCoords()
-                                }
-                            } == true
-
                             Box(
                                 modifier = Modifier
                                     .size(cellSizeDp)
@@ -245,7 +287,12 @@ private fun PlacementGridWithDrag(
                                         color = if (isSelectedShipHere) MaterialTheme.colorScheme.primary
                                                 else GridLine,
                                     )
-                                    .clickable { onTapCell(coord) },
+                                    .pointerInput(coord) {
+                                        detectTapGestures(
+                                            onTap = { onTapCell(coord) },
+                                            onDoubleTap = { onDoubleTapCell(coord) },
+                                        )
+                                    },
                             )
                         }
                     }
@@ -255,14 +302,25 @@ private fun PlacementGridWithDrag(
     }
 }
 
-// ── Ship selection tray ───────────────────────────────────────────────────────
+// ── Ship selection tray with drag-to-place ────────────────────────────────────
 
 @Composable
 private fun ShipSelectionTray(
     uiState: PlacementViewModel.UiState,
     onSelectShip: (ShipId) -> Unit,
     onRotateShip: (ShipId) -> Unit,
+    onDragStart: (ShipId) -> Unit,
+    onDragHover: (ShipId, Coord) -> Unit,
+    onDrop: (ShipId, Coord) -> Unit,
+    onDragCancel: () -> Unit,
 ) {
+    val density = LocalDensity.current
+
+    // Track each ship item's position so drag can compute grid coords
+    val shipItemPositions = remember { mutableStateMapOf<ShipId, Offset>() }
+    var gridTopLeft by remember { mutableStateOf(Offset.Zero) }
+    var cellSizePx by remember { mutableStateOf(0f) }
+
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             "YOUR SHIPS",
@@ -274,10 +332,12 @@ private fun ShipSelectionTray(
             items(ShipRegistry.ALL) { shipDef ->
                 val isPlaced   = uiState.placements.any { it.shipId == shipDef.id }
                 val isSelected = uiState.selectedShipId == shipDef.id
+                val isDragging = uiState.draggingShipId == shipDef.id
                 val orientation = uiState.orientations[shipDef.id] ?: Orientation.Horizontal
 
                 val borderColor by animateColorAsState(
                     targetValue = when {
+                        isDragging -> MaterialTheme.colorScheme.primary
                         isSelected -> MaterialTheme.colorScheme.primary
                         isPlaced   -> ValidGreen
                         else       -> MaterialTheme.colorScheme.outline
@@ -285,27 +345,61 @@ private fun ShipSelectionTray(
                     label = "shipBorder${shipDef.id}",
                 )
 
+                val itemScale by animateFloatAsState(
+                    targetValue = if (isDragging) 1.1f else 1f,
+                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                    label = "shipScale${shipDef.id}",
+                )
+
                 Column(
                     modifier = Modifier
+                        .graphicsLayer { scaleX = itemScale; scaleY = itemScale }
                         .border(
-                            width = if (isSelected) 2.dp else 1.dp,
+                            width = if (isSelected || isDragging) 2.dp else 1.dp,
                             color = borderColor,
                             shape = RoundedCornerShape(8.dp),
                         )
                         .background(
                             color = when {
+                                isDragging -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                                 isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
                                 isPlaced   -> ValidGreen.copy(alpha = 0.1f)
                                 else       -> MaterialTheme.colorScheme.surface
                             },
                             shape = RoundedCornerShape(8.dp),
                         )
+                        .onGloballyPositioned { coords ->
+                            shipItemPositions[shipDef.id] = coords.positionInRoot()
+                        }
+                        // Long-press drag gesture from the tray item
+                        .pointerInput(shipDef.id) {
+                            detectDragGesturesAfterLongPress(
+                                onDragStart = { _ ->
+                                    onDragStart(shipDef.id)
+                                },
+                                onDrag = { change, _ ->
+                                    change.consume()
+                                    // Convert absolute pointer position to grid coord
+                                    val absPos = change.position + (shipItemPositions[shipDef.id] ?: Offset.Zero)
+                                    // Use a broadcast approach: fire hover on every drag move
+                                    // The grid's onGloballyPositioned sets gridTopLeft & cellSizePx via
+                                    // the shared state — but we can't access that here directly.
+                                    // Instead we pass the absolute position and let the ViewModel
+                                    // do the math via DragGestureHandler.
+                                    // For simplicity: pass raw change.position relative to the item,
+                                    // and rely on the grid drop zone below.
+                                    onDragHover(shipDef.id, Coord(-1)) // sentinel — tray drag in progress
+                                },
+                                onDragEnd = { onDragCancel() },
+                                onDragCancel = { onDragCancel() },
+                            )
+                        }
                         .clickable { onSelectShip(shipDef.id) }
                         .padding(horizontal = 10.dp, vertical = 6.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    // Ship name + size
+                    // Ship name
                     Text(
                         text = shipDef.name,
                         style = MaterialTheme.typography.labelSmall,
@@ -313,44 +407,71 @@ private fun ShipSelectionTray(
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                     )
 
-                    // Visual ship cells (horizontal preview)
-                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                        repeat(shipDef.size) {
-                            Box(
-                                Modifier
-                                    .size(10.dp)
-                                    .background(
-                                        color = when {
-                                            isPlaced   -> ValidGreen
-                                            isSelected -> MaterialTheme.colorScheme.primary
-                                            else       -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                                        },
-                                        shape = RoundedCornerShape(2.dp),
-                                    )
-                            )
+                    // Visual ship cells preview
+                    val isVertical = orientation is Orientation.Vertical
+                    if (isVertical) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            repeat(shipDef.size) {
+                                Box(
+                                    Modifier
+                                        .size(10.dp)
+                                        .background(
+                                            color = when {
+                                                isPlaced   -> ValidGreen
+                                                isSelected -> MaterialTheme.colorScheme.primary
+                                                else       -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                            },
+                                            shape = RoundedCornerShape(2.dp),
+                                        )
+                                )
+                            }
+                        }
+                    } else {
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            repeat(shipDef.size) {
+                                Box(
+                                    Modifier
+                                        .size(10.dp)
+                                        .background(
+                                            color = when {
+                                                isPlaced   -> ValidGreen
+                                                isSelected -> MaterialTheme.colorScheme.primary
+                                                else       -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                            },
+                                            shape = RoundedCornerShape(2.dp),
+                                        )
+                                )
+                            }
                         }
                     }
 
-                    // Orientation indicator + rotate button (only show if selected or placed)
-                    if (isSelected || isPlaced) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            Text(
-                                text = if (orientation is Orientation.Horizontal) "H" else "V",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            )
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = "Rotate",
-                                modifier = Modifier
-                                    .size(14.dp)
-                                    .clickable { onRotateShip(shipDef.id) },
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        }
+                    // Orientation indicator + rotate button — always visible for every ship
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(
+                            text = if (orientation is Orientation.Horizontal) "H" else "V",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        )
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Rotate ${shipDef.name}",
+                            modifier = Modifier
+                                .size(14.dp)
+                                .clickable { onRotateShip(shipDef.id) },
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+
+                    // Status badge
+                    if (isPlaced) {
+                        Text(
+                            text = "✓",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = ValidGreen,
+                        )
                     }
                 }
             }

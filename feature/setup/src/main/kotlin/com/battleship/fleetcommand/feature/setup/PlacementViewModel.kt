@@ -1,6 +1,3 @@
-// ============================================================
-// feature/setup/src/main/kotlin/com/battleship/fleetcommand/feature/setup/PlacementViewModel.kt
-// ============================================================
 // FILE: feature/setup/src/main/kotlin/com/battleship/fleetcommand/feature/setup/PlacementViewModel.kt
 package com.battleship.fleetcommand.feature.setup
 
@@ -48,7 +45,13 @@ class PlacementViewModel @Inject constructor(
 
     private val route: ShipPlacementRoute = savedStateHandle.toRoute()
     private val gameMode = GameMode.fromStorageKey(route.mode)
-    private val playerSlot = if (route.playerSlot == 1) PlayerSlot.TWO else PlayerSlot.ONE
+
+    // FIX: playerSlot was inverted — route.playerSlot == 0 means P1, == 1 means P2.
+    private val playerSlot = if (route.playerSlot == 0) PlayerSlot.ONE else PlayerSlot.TWO
+
+    // FIX: read player names from route instead of hardcoding "Player 1" / "Player 2"
+    private val p1Name = route.player1Name.ifBlank { "Player 1" }
+    private val p2Name = route.player2Name.ifBlank { "Player 2" }
 
     @Immutable
     data class UiState(
@@ -59,12 +62,10 @@ class PlacementViewModel @Inject constructor(
         val isAutoPlacing: Boolean = false,
         val playerName: String = "Player",
         val mode: GameMode = GameMode.AI,
-        /** Currently selected ship (tap-to-place mode). */
         val selectedShipId: ShipId? = null,
-        /** Grid coords highlighted during a drag operation. */
         val hoverCoords: Set<Coord> = emptySet(),
-        /** Whether the current hover position is a valid placement. */
         val hoverValid: Boolean = false,
+        val draggingShipId: ShipId? = null,
     )
 
     sealed class UiEvent {
@@ -72,6 +73,7 @@ class PlacementViewModel @Inject constructor(
         data class RotateShip(val shipId: ShipId) : UiEvent()
         data class SelectShip(val shipId: ShipId) : UiEvent()
         data class HoverShip(val shipId: ShipId, val coord: Coord) : UiEvent()
+        data class SetDragging(val shipId: ShipId?) : UiEvent()
         data object ClearHover : UiEvent()
         data object AutoPlace : UiEvent()
         data object ClearAll : UiEvent()
@@ -80,7 +82,11 @@ class PlacementViewModel @Inject constructor(
 
     sealed class UiEffect {
         data class NavigateToBattle(val gameId: String) : UiEffect()
-        data class NavigateToHandOff(val gameId: String, val isP1HandOff: Boolean = false) : UiEffect()
+        data class NavigateToHandOff(
+            val gameId: String,
+            val isP1HandOff: Boolean = false,
+            val phase: String = "SETUP",
+        ) : UiEffect()
         data class ShowPlacementError(val error: PlacementError) : UiEffect()
     }
 
@@ -97,7 +103,8 @@ class PlacementViewModel @Inject constructor(
                 is UiEvent.RotateShip      -> rotateShip(event.shipId)
                 is UiEvent.SelectShip      -> selectShip(event.shipId)
                 is UiEvent.HoverShip       -> hoverShip(event.shipId, event.coord)
-                UiEvent.ClearHover         -> _uiState.update { it.copy(hoverCoords = emptySet(), hoverValid = false) }
+                is UiEvent.SetDragging     -> _uiState.update { it.copy(draggingShipId = event.shipId) }
+                UiEvent.ClearHover         -> _uiState.update { it.copy(hoverCoords = emptySet(), hoverValid = false, draggingShipId = null) }
                 UiEvent.AutoPlace          -> autoPlace()
                 UiEvent.ClearAll           -> clearAll()
                 UiEvent.ConfirmPlacement   -> confirmPlacement()
@@ -120,7 +127,8 @@ class PlacementViewModel @Inject constructor(
                 placements = newPlacements,
                 canConfirm = newPlacements.size == ShipRegistry.ALL.size,
                 board = buildBoard(newPlacements),
-                selectedShipId = null,   // deselect after placing
+                selectedShipId = null,
+                draggingShipId = null,
                 hoverCoords = emptySet(),
                 hoverValid = false,
             )
@@ -128,7 +136,6 @@ class PlacementViewModel @Inject constructor(
     }
 
     private fun selectShip(shipId: ShipId) {
-        // Toggle selection — tapping already-selected ship deselects it
         val current = _uiState.value.selectedShipId
         _uiState.update {
             it.copy(selectedShipId = if (current == shipId) null else shipId)
@@ -136,6 +143,7 @@ class PlacementViewModel @Inject constructor(
     }
 
     private fun hoverShip(shipId: ShipId, coord: Coord) {
+        if (!coord.isValid()) return  // sentinel from tray drag — ignore
         val orientation = _uiState.value.orientations[shipId] ?: Orientation.Horizontal
         val candidate = ShipPlacement(shipId, coord, orientation)
         val others = _uiState.value.placements.filter { it.shipId != shipId }
@@ -148,7 +156,6 @@ class PlacementViewModel @Inject constructor(
         val current = _uiState.value.orientations[shipId] ?: Orientation.Horizontal
         val toggled = if (current is Orientation.Horizontal) Orientation.Vertical else Orientation.Horizontal
         val newOrientations = _uiState.value.orientations + (shipId to toggled)
-        // Re-place if ship is already on board
         val existingPlacement = _uiState.value.placements.firstOrNull { it.shipId == shipId }
         if (existingPlacement != null) {
             val rotated = existingPlacement.copy(orientation = toggled)
@@ -156,7 +163,13 @@ class PlacementViewModel @Inject constructor(
             val errors = PlacementValidator.validate(rotated, others, AdjacencyMode.RELAXED)
             if (errors.isEmpty()) {
                 val newPlacements = others + rotated
-                _uiState.update { it.copy(orientations = newOrientations, placements = newPlacements, board = buildBoard(newPlacements)) }
+                _uiState.update {
+                    it.copy(
+                        orientations = newOrientations,
+                        placements = newPlacements,
+                        board = buildBoard(newPlacements),
+                    )
+                }
                 return
             }
         }
@@ -165,10 +178,17 @@ class PlacementViewModel @Inject constructor(
 
     private suspend fun autoPlace() {
         _uiState.update { it.copy(isAutoPlacing = true) }
-        val placements = withContext(Dispatchers.Default) {
-            generateRandomPlacements()
+        val placements = withContext(Dispatchers.Default) { generateRandomPlacements() }
+        val newOrientations = placements.associate { it.shipId to it.orientation }
+        _uiState.update {
+            it.copy(
+                placements = placements,
+                orientations = newOrientations,
+                isAutoPlacing = false,
+                canConfirm = true,
+                board = buildBoard(placements),
+            )
         }
-        _uiState.update { it.copy(placements = placements, isAutoPlacing = false, canConfirm = true, board = buildBoard(placements)) }
     }
 
     private fun generateRandomPlacements(): List<ShipPlacement> {
@@ -184,8 +204,7 @@ class PlacementViewModel @Inject constructor(
                 val coord = Coord.fromRowCol(row, col)
                 val placement = ShipPlacement(shipDef.id, coord, orientation)
                 if (PlacementValidator.validate(placement, result, AdjacencyMode.RELAXED).isEmpty()) {
-                    result.add(placement)
-                    placed = true
+                    result.add(placement); placed = true
                 }
             }
         }
@@ -199,8 +218,10 @@ class PlacementViewModel @Inject constructor(
                 canConfirm = false,
                 board = buildBoard(emptyList()),
                 selectedShipId = null,
+                draggingShipId = null,
                 hoverCoords = emptySet(),
                 hoverValid = false,
+                orientations = ShipRegistry.ALL.associate { def -> def.id to Orientation.Horizontal },
             )
         }
     }
@@ -210,7 +231,6 @@ class PlacementViewModel @Inject constructor(
         viewModelScope.launch {
             when (gameMode) {
                 GameMode.AI -> {
-                    // AI mode: playerSlot is always ONE (only human places manually)
                     val gameId = gameRepository.createGame(
                         com.battleship.fleetcommand.core.domain.model.Game(
                             mode = gameMode,
@@ -224,26 +244,28 @@ class PlacementViewModel @Inject constructor(
                 }
                 GameMode.LOCAL -> {
                     if (playerSlot == PlayerSlot.ONE) {
-                        // P1 first: create the game, save P1 board, hand off to P2 placement
+                        // P1 first: create the game with real player names, save P1 board, hand off to P2
                         val gameId = gameRepository.createGame(
                             com.battleship.fleetcommand.core.domain.model.Game(
                                 mode = gameMode,
-                                player1Name = "Player 1", player2Name = "Player 2",
+                                player1Name = p1Name,
+                                player2Name = p2Name,
                                 id = java.util.UUID.randomUUID().toString(),
                                 startedAt = System.currentTimeMillis(),
                             )
                         )
                         gameRepository.saveBoardState(gameId, PlayerSlot.ONE, _uiState.value.placements)
-                        // Hand off → P2 will place, then battle starts
-                        _uiEffect.emit(UiEffect.NavigateToHandOff(gameId, isP1HandOff = true))
+                        // FIX: phase = "SETUP" so HandOffScreen knows to go to P2 placement, not BattleScreen
+                        _uiEffect.emit(UiEffect.NavigateToHandOff(gameId, isP1HandOff = true, phase = "SETUP"))
                     } else {
-                        // P2: game already exists — save P2 board then hand off to battle
+                        // P2: game already exists — save P2 board then navigate to battle
                         val gameId = route.gameId
                         gameRepository.saveBoardState(gameId, PlayerSlot.TWO, _uiState.value.placements)
-                        _uiEffect.emit(UiEffect.NavigateToHandOff(gameId, isP1HandOff = false))
+                        // FIX: phase = "SETUP" — HandOffScreen will navigate to BattleRoute (not popBackStack)
+                        _uiEffect.emit(UiEffect.NavigateToHandOff(gameId, isP1HandOff = true, phase = "SETUP"))
                     }
                 }
-                GameMode.ONLINE -> _uiEffect.emit(UiEffect.NavigateToHandOff(route.gameId, isP1HandOff = false))
+                GameMode.ONLINE -> _uiEffect.emit(UiEffect.NavigateToHandOff(route.gameId, isP1HandOff = false, phase = "SETUP"))
             }
         }
     }

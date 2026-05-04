@@ -1,6 +1,3 @@
-// ============================================================
-// feature/menu/src/main/kotlin/com/battleship/fleetcommand/feature/menu/PlayerNamesViewModel.kt
-// ============================================================
 // FILE: feature/menu/src/main/kotlin/com/battleship/fleetcommand/feature/menu/PlayerNamesViewModel.kt
 package com.battleship.fleetcommand.feature.menu
 
@@ -25,8 +22,14 @@ class PlayerNamesViewModel @Inject constructor(savedStateHandle: SavedStateHandl
     private val route: PlayerNamesRoute = savedStateHandle.toRoute()
 
     data class UiState(val player1: String = "Player 1", val player2: String = "Player 2")
+
     sealed class UiEffect {
-        data class NavigateToPlacement(val mode: String) : UiEffect()
+        // FIX: pass player names through to ShipPlacementRoute so the Game record stores real names
+        data class NavigateToPlacement(
+            val mode: String,
+            val player1Name: String,
+            val player2Name: String,
+        ) : UiEffect()
     }
 
     private val _uiState = MutableStateFlow(UiState())
@@ -39,6 +42,14 @@ class PlayerNamesViewModel @Inject constructor(savedStateHandle: SavedStateHandl
     fun setPlayer2(name: String) = _uiState.update { it.copy(player2 = name) }
 
     fun confirm() {
-        viewModelScope.launch { _uiEffect.emit(UiEffect.NavigateToPlacement(route.mode)) }
+        viewModelScope.launch {
+            _uiEffect.emit(
+                UiEffect.NavigateToPlacement(
+                    mode = route.mode,
+                    player1Name = _uiState.value.player1.trim().ifBlank { "Player 1" },
+                    player2Name = _uiState.value.player2.trim().ifBlank { "Player 2" },
+                )
+            )
+        }
     }
 }

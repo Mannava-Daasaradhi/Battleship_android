@@ -1,6 +1,3 @@
-// ============================================================
-// feature/menu/src/main/kotlin/com/battleship/fleetcommand/feature/menu/PlayerNamesScreen.kt
-// ============================================================
 // FILE: feature/menu/src/main/kotlin/com/battleship/fleetcommand/feature/menu/PlayerNamesScreen.kt
 package com.battleship.fleetcommand.feature.menu
 
@@ -29,8 +26,16 @@ fun PlayerNamesScreen(
     LaunchedEffect(Unit) {
         viewModel.uiEffect.collectLatest { effect ->
             when (effect) {
+                // FIX: pass player names into ShipPlacementRoute so they flow through to the Game record
                 is PlayerNamesViewModel.UiEffect.NavigateToPlacement ->
-                    navController.navigate(ShipPlacementRoute(mode = effect.mode, playerSlot = 0))
+                    navController.navigate(
+                        ShipPlacementRoute(
+                            mode = effect.mode,
+                            playerSlot = 0,          // P1 places first
+                            player1Name = effect.player1Name,
+                            player2Name = effect.player2Name,
+                        )
+                    )
             }
         }
     }
@@ -44,10 +49,26 @@ fun PlayerNamesScreen(
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("PLAYER NAMES", style = MaterialTheme.typography.headlineLarge, color = MaterialTheme.colorScheme.onBackground)
-                OutlinedTextField(value = uiState.player1, onValueChange = viewModel::setPlayer1, label = { Text("Player 1") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = uiState.player2, onValueChange = viewModel::setPlayer2, label = { Text("Player 2") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    value = uiState.player1,
+                    onValueChange = viewModel::setPlayer1,
+                    label = { Text("Player 1") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                OutlinedTextField(
+                    value = uiState.player2,
+                    onValueChange = viewModel::setPlayer2,
+                    label = { Text("Player 2") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 Spacer(Modifier.height(8.dp))
-                BattleshipButton(text = "START", onClick = viewModel::confirm, modifier = Modifier.fillMaxWidth())
+                BattleshipButton(
+                    text = "START",
+                    onClick = viewModel::confirm,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         }
     }

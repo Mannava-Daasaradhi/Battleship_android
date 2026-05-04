@@ -69,12 +69,14 @@ fun BattleScreen(
                         popUpTo<com.battleship.fleetcommand.navigation.MainMenuRoute> { inclusive = false }
                     }
                 is BattleViewModel.UiEffect.NavigateToPassAndPlayHandOff -> {
-                    // Navigate to HandOff; on return the resumed player's turn begins via onEvent
+                    // FIX: pass phase="BATTLE" so HandOffScreen uses popBackStack() + savedStateHandle
+                    // (correct for mid-game turn handoffs) rather than the SETUP forward-navigate path
                     navController.navigate(
                         HandOffRoute(
                             gameId = effect.gameId,
                             mode = "LOCAL",
                             isP1HandOff = effect.isP1Turn,
+                            phase = "BATTLE",
                         )
                     )
                 }

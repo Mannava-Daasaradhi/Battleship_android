@@ -1,6 +1,3 @@
-// ============================================================
-// feature/game/src/main/kotlin/com/battleship/fleetcommand/feature/game/handoff/HandOffScreen.kt
-// ============================================================
 // FILE: feature/game/src/main/kotlin/com/battleship/fleetcommand/feature/game/handoff/HandOffScreen.kt
 package com.battleship.fleetcommand.feature.game.handoff
 
@@ -30,6 +27,13 @@ import kotlinx.coroutines.flow.collectLatest
 /**
  * HandOffScreen — CANNOT be skipped. Full opaque overlay. 3-second mandatory countdown.
  * Back gesture completely disabled. Screen orientation locked. Section 8.4, Section 12.
+ *
+ * FIX: The `phase` field on [HandOffRoute] now distinguishes two use-cases:
+ *   - "SETUP"  → initial placement handoff between P1 and P2 (or P2 to Battle start)
+ *   - "BATTLE" → mid-game turn handoff during Pass & Play battles
+ *
+ * Without this distinction, P2's post-placement handoff incorrectly tried to
+ * popBackStack() to BattleScreen which had never been pushed onto the stack.
  */
 @Composable
 fun HandOffScreen(
@@ -57,35 +61,63 @@ fun HandOffScreen(
             when (effect) {
                 HandOffViewModel.UiEffect.NavigateToNextScreen -> {
                     val gameId = route.gameId
-                    val mode = route.mode
-                    if (mode == "LOCAL" && route.isP1HandOff) {
-                        // After P1 initial placement handoff: navigate to P2 placement screen
-                        navController.navigate(
-                            com.battleship.fleetcommand.navigation.ShipPlacementRoute(
-                                mode = mode,
-                                playerSlot = 1,
-                                gameId = gameId,
+                    val mode   = route.mode
+                    val phase  = route.phase  // "SETUP" or "BATTLE"
+
+                    when {
+                        // ── SETUP phase: initial placement handoffs ──────────────────
+                        phase == "SETUP" && mode == "LOCAL" && route.isP1HandOff -> {
+                            // After P1 places fleet → hand off to P2 placement screen
+                            navController.navigate(
+                                com.battleship.fleetcommand.navigation.ShipPlacementRoute(
+                                    mode = mode,
+                                    playerSlot = 1,   // P2
+                                    gameId = gameId,
+                                )
                             )
-                        )
-                    } else if (mode == "LOCAL" && !route.isP1HandOff) {
-                        // During battle hand-off: pop back to BattleScreen and signal whose turn it is.
-                        // isP1HandOff=false during battle means it's about to be P2's turn (isP1Turn=false).
-                        // isP1HandOff=true during battle means it's about to be P1's turn (isP1Turn=true).
-                        // We encode this in the HandOffRoute.isP1HandOff field:
-                        //   isP1HandOff=true  → P1 is about to play  → resume P1 turn
-                        //   isP1HandOff=false → P2 is about to play  → resume P2 turn
-                        // Pop back to BattleScreen (it's already in back stack)
-                        navController.popBackStack()
-                        // BattleScreen will observe this via a saved state handle key
-                        navController.currentBackStackEntry
-                            ?.savedStateHandle
-                            ?.set("passAndPlayResumeP1", route.isP1HandOff)
-                    } else {
-                        // After P2 handoff (or AI/Online): start the battle
-                        navController.navigate(
-                            com.battleship.fleetcommand.navigation.BattleRoute(gameId = gameId)
-                        ) {
-                            popUpTo(com.battleship.fleetcommand.navigation.ModeSelectRoute) { inclusive = false }
+                        }
+
+                        phase == "SETUP" && mode == "LOCAL" && !route.isP1HandOff -> {
+                            // FIX: After P2 places fleet → navigate forward to BattleScreen.
+                            // Old code did popBackStack() here which went back to P2's placement
+                            // screen because BattleScreen had never been pushed onto the stack.
+                            navController.navigate(
+                                com.battleship.fleetcommand.navigation.BattleRoute(gameId = gameId)
+                            ) {
+                                // Clear placement screens from back stack — pressing Back
+                                // from Battle should not return to placement
+                                popUpTo(com.battleship.fleetcommand.navigation.ModeSelectRoute) {
+                                    inclusive = false
+                                }
+                            }
+                        }
+
+                        phase == "SETUP" -> {
+                            // AI mode or Online after P2 setup — navigate to Battle
+                            navController.navigate(
+                                com.battleship.fleetcommand.navigation.BattleRoute(gameId = gameId)
+                            ) {
+                                popUpTo(com.battleship.fleetcommand.navigation.ModeSelectRoute) { inclusive = false }
+                            }
+                        }
+
+                        // ── BATTLE phase: mid-game turn handoffs (Pass & Play only) ──
+                        phase == "BATTLE" -> {
+                            // Pop back to BattleScreen (it IS in the back stack during battle)
+                            // and signal whose turn begins via saved state handle.
+                            navController.popBackStack()
+                            navController.currentBackStackEntry
+                                ?.savedStateHandle
+                                ?.set("passAndPlayResumeP1", route.isP1HandOff)
+                        }
+
+                        else -> {
+                            // Fallback — navigate to Battle
+                            navController.navigate(
+                                com.battleship.fleetcommand.navigation.BattleRoute(gameId = gameId)
+                            ) {
+                                popUpTo(com.battleship.fleetcommand.navigation.ModeSelectRoute) { inclusive = false }
+                            }
                         }
                     }
                 }
