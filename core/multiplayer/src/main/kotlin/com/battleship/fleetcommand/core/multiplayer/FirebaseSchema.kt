@@ -12,11 +12,24 @@ package com.battleship.fleetcommand.core.multiplayer
  */
 object FirebaseSchema {
 
-    // ── Top-level collection ──────────────────────────────────────────────
+    // ── Top-level collections ─────────────────────────────────────────────────
     /** Root collection node: /games */
     const val GAMES = "games"
 
-    // ── Game sub-nodes ────────────────────────────────────────────────────
+    /**
+     * Room-code → gameId lookup index: /roomCodes/{roomCode}
+     *
+     * Each node contains a single "gameId" string value.
+     * This node has .read: auth != null in security rules so guests can look up
+     * a game by room code without needing collection-level read on /games
+     * (which would expose opponent board data).
+     */
+    const val ROOM_CODES = "roomCodes"
+
+    /** Key inside /roomCodes/{roomCode} that holds the gameId. */
+    const val GAME_ID = "gameId"
+
+    // ── Game sub-nodes ────────────────────────────────────────────────────────
     /** /games/{gameId}/meta */
     const val META = "meta"
     /** /games/{gameId}/players */
@@ -28,7 +41,7 @@ object FirebaseSchema {
     /** /games/{gameId}/chat */
     const val CHAT = "chat"
 
-    // ── Meta keys (/games/{gameId}/meta) ──────────────────────────────────
+    // ── Meta keys (/games/{gameId}/meta) ──────────────────────────────────────
     const val HOST_UID = "hostUid"
     const val GUEST_UID = "guestUid"
     const val STATUS = "status"
@@ -38,39 +51,41 @@ object FirebaseSchema {
     const val CURRENT_TURN = "currentTurn"
     const val ROOM_CODE = "roomCode"
 
-    // ── Status string values ──────────────────────────────────────────────
+    // ── Status string values ──────────────────────────────────────────────────
     const val STATUS_WAITING = "waiting"
     const val STATUS_SETUP = "setup"
     const val STATUS_BATTLE = "battle"
     const val STATUS_FINISHED = "finished"
 
-    // ── Player node keys (/games/{gameId}/players/{uid}) ──────────────────
+    // ── Player node keys (/games/{gameId}/players/{uid}) ──────────────────────
     const val PLAYER_NAME = "name"
     const val PLAYER_READY = "ready"
     const val PLAYER_CONNECTED = "connected"
     const val PLAYER_LAST_SEEN = "lastSeen"
 
-    // ── Board node keys (/games/{gameId}/boards/{uid}) ────────────────────
+    // ── Board node keys (/games/{gameId}/boards/{uid}) ────────────────────────
     const val BOARD_SHIPS = "ships"
 
-    // ── Shot node keys (/games/{gameId}/shots/{shooterUid}/{shotIndex}) ───
+    // ── Shot node keys (/games/{gameId}/shots/{shooterUid}/{shotPushKey}) ─────
     const val SHOT_ROW = "row"
     const val SHOT_COL = "col"
     const val SHOT_RESULT = "result"
     const val SHOT_SHIP_ID = "shipId"
     const val SHOT_TIMESTAMP = "timestamp"
 
-    // ── Shot result string values ─────────────────────────────────────────
+    // ── Shot result string values ─────────────────────────────────────────────
     const val RESULT_HIT = "hit"
     const val RESULT_MISS = "miss"
     const val RESULT_SUNK = "sunk"
 
-    // ── Chat node keys (/games/{gameId}/chat/{messageId}) ─────────────────
+    // ── Chat node keys (/games/{gameId}/chat/{messageId}) ─────────────────────
     const val CHAT_UID = "uid"
     const val CHAT_TEXT = "text"
     const val CHAT_TIMESTAMP = "timestamp"
 
-    // ── Helpers: full path builders ───────────────────────────────────────
+    // ── Helpers: full path builders ───────────────────────────────────────────
+
+    fun roomCodePath(roomCode: String) = "$ROOM_CODES/$roomCode"
 
     fun gamePath(gameId: String) = "$GAMES/$gameId"
 
