@@ -5,15 +5,22 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 
 private val NavyDarkColorScheme = darkColorScheme(
-    primary          = NavyPrimary,
-    onPrimary        = NavyOnPrimary,
-    secondary        = NavySecondary,
-    onSecondary      = NavyOnSecondary,
-    background       = NavyBackground,
-    onBackground     = NavyOnBackground,
-    surface          = NavySurface,
-    onSurface        = NavyOnSurface,
-    error            = NavyError,
+    primary            = NavyPrimary,
+    onPrimary          = NavyOnPrimary,
+    primaryContainer   = NavySurfaceVariant,
+    onPrimaryContainer = NavyOnSurface,
+    secondary          = NavySecondary,
+    onSecondary        = NavyOnSecondary,
+    tertiary           = GoldAccent,        // Gold for highlights, badges, CTAs
+    onTertiary         = GoldOnAccent,
+    background         = NavyBackground,
+    onBackground       = NavyOnBackground,
+    surface            = NavySurface,
+    onSurface          = NavyOnSurface,
+    surfaceVariant     = NavySurfaceVariant,
+    onSurfaceVariant   = NavyOnSurface,
+    error              = NavyError,
+    outline            = GridLine,
 )
 
 @Composable

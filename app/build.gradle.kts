@@ -50,9 +50,12 @@ android {
             signingConfig = signingConfigs.getByName("release")
         }
         debug {
-            // applicationIdSuffix removed: google-services.json only has the base
-            // package name registered. Add a debug entry in Firebase Console and
-            // re-download google-services.json before re-enabling this.
+            // Suffix prevents debug + release builds showing as two separate launcher icons.
+            // To also use Firebase features in debug: add "com.battleship.fleetcommand.debug"
+            // in Firebase Console -> Project Settings -> Your Apps, then re-download
+            // google-services.json.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
             isDebuggable = true
         }
     }

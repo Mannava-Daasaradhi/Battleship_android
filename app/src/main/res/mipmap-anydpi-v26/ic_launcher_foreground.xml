@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    App icon foreground — Battleship Fleet Command
+    A bold naval anchor design with a gold accent circle,
+    designed for the 108dp safe zone of adaptive icons.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Gold outer ring -->
+    <path
+        android:fillColor="#D4AF37"
+        android:pathData="M54,18 A36,36 0 1,1 53.99,18 Z
+                          M54,24 A30,30 0 1,0 54.01,24 Z"/>
+
+    <!-- Anchor shaft (vertical bar) -->
+    <path
+        android:fillColor="#F0F4FF"
+        android:pathData="M51,28 L57,28 L57,72 L51,72 Z"/>
+
+    <!-- Anchor crossbar -->
+    <path
+        android:fillColor="#F0F4FF"
+        android:pathData="M36,38 L72,38 L72,44 L36,44 Z"
+        android:strokeWidth="0"/>
+
+    <!-- Anchor ring (top) -->
+    <path
+        android:fillColor="#F0F4FF"
+        android:pathData="M54,22 A8,8 0 0,1 54,38 A8,8 0 0,1 54,22 Z
+                          M54,26 A4,4 0 0,0 54,34 A4,4 0 0,0 54,26 Z"/>
+
+    <!-- Left fluke -->
+    <path
+        android:fillColor="#F0F4FF"
+        android:pathData="M51,72 Q38,68 34,78 Q38,82 44,78 L51,72 Z"/>
+
+    <!-- Right fluke -->
+    <path
+        android:fillColor="#F0F4FF"
+        android:pathData="M57,72 Q70,68 74,78 Q70,82 64,78 L57,72 Z"/>
+
+    <!-- Left arm cap -->
+    <path
+        android:fillColor="#D4AF37"
+        android:pathData="M36,38 L36,44 L42,44 L42,38 Z"/>
+
+    <!-- Right arm cap -->
+    <path
+        android:fillColor="#D4AF37"
+        android:pathData="M66,38 L66,44 L72,44 L72,38 Z"/>
+
+    <!-- Center gold dot -->
+    <path
+        android:fillColor="#D4AF37"
+        android:pathData="M50,29 A4,4 0 1,1 58,29 A4,4 0 1,1 50,29 Z"/>
+
+</vector>

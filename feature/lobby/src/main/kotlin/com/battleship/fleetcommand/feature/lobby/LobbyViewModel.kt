@@ -80,32 +80,38 @@ class LobbyViewModel @Inject constructor(
 
     private fun handleHostGame() {
         viewModelScope.launch {
-            // observePlayerName() returns Flow<String> — take the current value
             val playerName = preferencesRepository.observePlayerName().first().ifBlank { "Host" }
 
             _uiState.update { it.copy(isLoading = true, error = null, mode = LobbyMode.HOSTING) }
 
-            repository.createGame(playerName).collect { result ->
-                when (result) {
-                    is GameCreationResult.Success -> {
-                        _uiState.update {
-                            it.copy(
-                                isLoading = false,
-                                roomCode  = result.roomCode,
-                                hostName  = playerName
-                            )
+            repository.createGame(playerName)
+                .catch { e ->
+                    val msg = e.message ?: "Failed to create game. Check your connection."
+                    Timber.e(e, "LobbyViewModel: createGame flow error")
+                    _uiState.update { it.copy(isLoading = false, error = msg, mode = LobbyMode.CHOOSE) }
+                    _effects.send(LobbyUiEffect.ShowError(msg))
+                }
+                .collect { result ->
+                    when (result) {
+                        is GameCreationResult.Success -> {
+                            _uiState.update {
+                                it.copy(
+                                    isLoading = false,
+                                    roomCode  = result.roomCode,
+                                    hostName  = playerName
+                                )
+                            }
+                            _effects.send(LobbyUiEffect.NavigateToWaiting(result.gameId))
                         }
-                        _effects.send(LobbyUiEffect.NavigateToWaiting(result.gameId))
-                    }
-                    is GameCreationResult.Failure -> {
-                        Timber.e("LobbyViewModel: createGame failed reason=${result.reason}")
-                        _uiState.update {
-                            it.copy(isLoading = false, error = result.reason, mode = LobbyMode.CHOOSE)
+                        is GameCreationResult.Failure -> {
+                            Timber.e("LobbyViewModel: createGame failed reason=${result.reason}")
+                            _uiState.update {
+                                it.copy(isLoading = false, error = result.reason, mode = LobbyMode.CHOOSE)
+                            }
+                            _effects.send(LobbyUiEffect.ShowError(result.reason))
                         }
-                        _effects.send(LobbyUiEffect.ShowError(result.reason))
                     }
                 }
-            }
         }
     }
 
@@ -140,29 +146,36 @@ class LobbyViewModel @Inject constructor(
 
             _uiState.update { it.copy(isLoading = true, error = null) }
 
-            repository.joinGame(roomCode, playerName).collect { result ->
-                when (result) {
-                    is JoinResult.Success -> {
-                        _uiState.update { it.copy(isLoading = false, guestName = playerName) }
-                        _effects.send(LobbyUiEffect.NavigateToWaiting(result.gameId))
-                    }
-                    is JoinResult.NotFound -> {
-                        val msg = "Room code not found. Check the code and try again."
-                        _uiState.update { it.copy(isLoading = false, error = msg) }
-                        _effects.send(LobbyUiEffect.ShowError(msg))
-                    }
-                    is JoinResult.GameAlreadyStarted -> {
-                        val msg = "This game has already started."
-                        _uiState.update { it.copy(isLoading = false, error = msg) }
-                        _effects.send(LobbyUiEffect.ShowError(msg))
-                    }
-                    is JoinResult.Failure -> {
-                        val msg = result.reason.ifBlank { "Network error. Check your connection." }
-                        _uiState.update { it.copy(isLoading = false, error = msg) }
-                        _effects.send(LobbyUiEffect.ShowError(msg))
+            repository.joinGame(roomCode, playerName)
+                .catch { e ->
+                    val msg = e.message ?: "Network error. Check your connection."
+                    Timber.e(e, "LobbyViewModel: joinGame flow error")
+                    _uiState.update { it.copy(isLoading = false, error = msg) }
+                    _effects.send(LobbyUiEffect.ShowError(msg))
+                }
+                .collect { result ->
+                    when (result) {
+                        is JoinResult.Success -> {
+                            _uiState.update { it.copy(isLoading = false, guestName = playerName) }
+                            _effects.send(LobbyUiEffect.NavigateToWaiting(result.gameId))
+                        }
+                        is JoinResult.NotFound -> {
+                            val msg = "Room code not found. Check the code and try again."
+                            _uiState.update { it.copy(isLoading = false, error = msg) }
+                            _effects.send(LobbyUiEffect.ShowError(msg))
+                        }
+                        is JoinResult.GameAlreadyStarted -> {
+                            val msg = "This game has already started."
+                            _uiState.update { it.copy(isLoading = false, error = msg) }
+                            _effects.send(LobbyUiEffect.ShowError(msg))
+                        }
+                        is JoinResult.Failure -> {
+                            val msg = result.reason.ifBlank { "Network error. Check your connection." }
+                            _uiState.update { it.copy(isLoading = false, error = msg) }
+                            _effects.send(LobbyUiEffect.ShowError(msg))
+                        }
                     }
                 }
-            }
         }
     }
 

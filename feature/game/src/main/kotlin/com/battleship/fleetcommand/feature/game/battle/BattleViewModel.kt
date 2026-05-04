@@ -301,6 +301,11 @@ class BattleViewModel @Inject constructor(
                 val winnerName = if (gameMode == GameMode.LOCAL) {
                     if (isP1ActiveTurn) p1Name else p2Name
                 } else "Player"
+                // Record the finished game in the DB (used by StatsRepository)
+                runCatching {
+                    val winnerSlot = if (gameMode == GameMode.LOCAL && !isP1ActiveTurn) PlayerSlot.TWO else PlayerSlot.ONE
+                    gameRepository.finishGame(gameId, winnerSlot, 0L)
+                }
                 _uiEffect.emit(UiEffect.NavigateToGameOver(gameId, winnerName))
                 return@launch
             }
@@ -364,6 +369,8 @@ class BattleViewModel @Inject constructor(
             _uiState.update { it.copy(isAiThinking = false) }
             soundManager.play(com.battleship.fleetcommand.core.ui.sound.GameSound.DEFEAT)
             hapticManager.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.DEFEAT)
+            // Record the finished game in the DB (used by StatsRepository)
+            runCatching { gameRepository.finishGame(gameId, PlayerSlot.TWO, 0L) }
             _uiEffect.emit(UiEffect.NavigateToGameOver(gameId, "AI"))
             return
         }

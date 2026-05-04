@@ -261,8 +261,9 @@ class PlacementViewModel @Inject constructor(
                         // P2: game already exists — save P2 board then navigate to battle
                         val gameId = route.gameId
                         gameRepository.saveBoardState(gameId, PlayerSlot.TWO, _uiState.value.placements)
-                        // FIX: phase = "SETUP" — HandOffScreen will navigate to BattleRoute (not popBackStack)
-                        _uiEffect.emit(UiEffect.NavigateToHandOff(gameId, isP1HandOff = true, phase = "SETUP"))
+                        // isP1HandOff = FALSE → HandOffScreen sees phase="SETUP" && !isP1HandOff
+                        // → navigates forward to BattleRoute (not back to P2 placement)
+                        _uiEffect.emit(UiEffect.NavigateToHandOff(gameId, isP1HandOff = false, phase = "SETUP"))
                     }
                 }
                 GameMode.ONLINE -> _uiEffect.emit(UiEffect.NavigateToHandOff(route.gameId, isP1HandOff = false, phase = "SETUP"))

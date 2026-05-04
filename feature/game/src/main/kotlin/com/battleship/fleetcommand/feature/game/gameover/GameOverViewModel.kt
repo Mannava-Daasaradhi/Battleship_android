@@ -83,35 +83,44 @@ class GameOverViewModel @Inject constructor(
         val gameId = route.gameId
         val winner = route.winner
 
+        // winner == "AI" means AI won in single-player; any other value is a player name
         _uiState.update { it.copy(winner = winner, isPlayerWin = winner != "AI") }
 
-        if (gameId.isNotBlank()) {
+        if (gameId.isBlank()) {
+            _uiState.update { it.copy(isLoading = false) }
+            return
+        }
+
+        // Wrap all DB access in try/catch — a Room exception (migration gap, missing row, etc.)
+        // must NEVER crash the process. Worst case we show the result card without board details.
+        try {
             val myPlacements = gameRepository.getBoardState(gameId, PlayerSlot.ONE) ?: emptyList()
             val aiPlacements = gameRepository.getBoardState(gameId, PlayerSlot.TWO) ?: emptyList()
-            val shots = gameRepository.getShots(gameId)
-            val myShots = shots.filter { it.firedBy == PlayerSlot.ONE }
-            val aiShots = shots.filter { it.firedBy == PlayerSlot.TWO }
+            val shots        = gameRepository.getShots(gameId)
+            val myShots      = shots.filter { it.firedBy == PlayerSlot.ONE }
+            val aiShots      = shots.filter { it.firedBy == PlayerSlot.TWO }
 
-            val myShotCoords = myShots.map { it.coord }.toSet()
-            val aiShotCoords = aiShots.map { it.coord }.toSet()
+            val myShotCoords  = myShots.map { it.coord }.toSet()
+            val aiShotCoords  = aiShots.map { it.coord }.toSet()
             val hits = myShots.count { s ->
                 aiPlacements.any { p -> s.coord in p.occupiedCoords() }
             }
             val accuracy = if (myShots.isEmpty()) 0 else (hits * 100) / myShots.size
 
-            val myBoard = buildRevealedBoard(myPlacements, aiShotCoords)
+            val myBoard       = buildRevealedBoard(myPlacements, aiShotCoords)
             val opponentBoard = buildRevealedBoard(aiPlacements, myShotCoords)
 
             _uiState.update {
                 it.copy(
-                    myBoard = myBoard,
+                    myBoard       = myBoard,
                     opponentBoard = opponentBoard,
-                    accuracy = accuracy,
-                    totalShots = myShots.size,
-                    isLoading = false,
+                    accuracy      = accuracy,
+                    totalShots    = myShots.size,
+                    isLoading     = false,
                 )
             }
-        } else {
+        } catch (e: Exception) {
+            // DB read failed — still dismiss the loading spinner so the result card is shown
             _uiState.update { it.copy(isLoading = false) }
         }
     }

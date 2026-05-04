@@ -149,16 +149,16 @@ fun BattleScreen(
                 color = MaterialTheme.colorScheme.primary,
             )
             Box {
+                // Pass null when not the player's turn — GameCell removes the click modifier
+                // entirely so no pointer events can fire. This is the strongest possible
+                // spam guard: no lambda, no clickable(), no event routing at all.
+                val canFire = uiState.isMyTurn && !uiState.isAnimating && !uiState.isAiThinking
                 GameGrid(
                     board = uiState.opponentBoard,
                     showShips = false,
-                    onCellTapped = { cell: CellViewState ->
-                        // ViewModel has the authoritative synchronous guard (isProcessingShot).
-                        // UI guard here is a best-effort pre-filter only.
-                        if (uiState.isMyTurn && !uiState.isAnimating) {
-                            viewModel.onEvent(BattleViewModel.UiEvent.CellTapped(cell.coord))
-                        }
-                    },
+                    onCellTapped = if (canFire) { cell: CellViewState ->
+                        viewModel.onEvent(BattleViewModel.UiEvent.CellTapped(cell.coord))
+                    } else null,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 if (uiState.isAiThinking) {
