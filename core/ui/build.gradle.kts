@@ -2,6 +2,7 @@ plugins {
     id("battleship.android.library.compose")
     id("com.google.dagger.hilt.android")
     id("com.google.devtools.ksp")
+    alias(libs.plugins.kotlin.serialization)   // required: Routes.kt uses @Serializable
 }
 
 android { namespace = "com.battleship.fleetcommand.core.ui" }
@@ -25,6 +26,7 @@ dependencies {
     implementation(libs.lottie.compose)
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.collections.immutable)
+    implementation(libs.timber)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

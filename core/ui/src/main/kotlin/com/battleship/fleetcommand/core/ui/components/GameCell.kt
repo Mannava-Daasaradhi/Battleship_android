@@ -19,6 +19,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
 import com.battleship.fleetcommand.core.ui.model.CellDisplayState
 import com.battleship.fleetcommand.core.ui.model.CellViewState
@@ -67,21 +72,40 @@ fun GameCell(
         label = "cellScale",
     )
 
+    // Section 17 — Accessibility: content description for TalkBack.
+    // Announced as: "Row A Column 1: Empty", "Row B Column 3: Hit", etc.
+    val rowLabel = 'A' + cell.coord.rowOf()
+    val colLabel = cell.coord.colOf() + 1
+    val stateDesc = when (cell.state) {
+        CellDisplayState.WATER -> "Empty"
+        CellDisplayState.SHIP  -> "Your ship"
+        CellDisplayState.HIT   -> "Hit"
+        CellDisplayState.MISS  -> "Miss"
+        CellDisplayState.SUNK  -> "Sunk ship"
+    }
+    val contentDesc = "Row $rowLabel Column $colLabel: $stateDesc"
+    val isInteractive = onTap != null && !cell.state.isShot
+
     Box(
         modifier = modifier
             .size(cellSizeDp)
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .background(baseColor)
             .drawBehind {
-                // Canvas border — no extra allocation from Modifier.border
                 drawRect(color = GridLine, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1f))
             }
             .background(animatedHighlight)
+            // Section 17 semantics — every cell gets a content description;
+            // interactive cells also get Role.Button so TalkBack announces "double-tap to activate".
+            .semantics(mergeDescendants = true) {
+                contentDescription = contentDesc
+                if (isInteractive) {
+                    role = Role.Button
+                    stateDescription = "Tap to fire"
+                }
+            }
             .then(
-                if (onTap != null && !cell.state.isShot)
-                    Modifier.clickable(onClick = onTap)
-                else
-                    Modifier
+                if (isInteractive) Modifier.clickable(onClick = onTap!!) else Modifier
             ),
         contentAlignment = Alignment.Center,
     ) {

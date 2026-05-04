@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Battleship Fleet Command</string>
+
+    <!--
+        Play Games Services App ID — Section 7.
+        ⚠️ Replace "000000000000" with your real numeric App ID from:
+        Play Console → Play Games Services → Setup and management → Configuration
+        Until replaced, Play Games features (leaderboards/achievements) will be
+        disabled but the app will NOT crash.
+    -->
+    <string name="app_id" translatable="false">000000000000</string>
+</resources>

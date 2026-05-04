@@ -46,6 +46,8 @@ class BattleViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val gameRepository: GameRepository,
     private val gameEngine: GameEngine,
+    private val soundManager: com.battleship.fleetcommand.core.ui.sound.SoundManager,
+    private val hapticManager: com.battleship.fleetcommand.core.ui.haptic.HapticManager,
 ) : ViewModel() {
 
     private val route: BattleRoute = savedStateHandle.toRoute()
@@ -153,14 +155,32 @@ class BattleViewModel @Inject constructor(
 
             when (outcome) {
                 is ShotOutcome.Miss -> {
+                    // Section 10: cannon fire SFX on shot; splash on miss
+                    soundManager.play(com.battleship.fleetcommand.core.ui.sound.GameSound.FIRE_CANNON)
+                    soundManager.play(com.battleship.fleetcommand.core.ui.sound.GameSound.MISS_SPLASH)
+                    // Section 15: SHOT_FIRED tick + MISS tick
+                    hapticManager.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.SHOT_FIRED)
+                    hapticManager.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.MISS)
                     _uiEffect.emit(UiEffect.ShowMissAnimation(coord))
                 }
                 is ShotOutcome.Hit -> {
                     _uiState.update { it.copy(hitCount = it.hitCount + 1) }
+                    // Section 10: cannon fire + explosion
+                    soundManager.play(com.battleship.fleetcommand.core.ui.sound.GameSound.FIRE_CANNON)
+                    soundManager.play(com.battleship.fleetcommand.core.ui.sound.GameSound.HIT_EXPLOSION)
+                    // Section 15: SHOT_FIRED tick + HIT pulse
+                    hapticManager.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.SHOT_FIRED)
+                    hapticManager.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.HIT)
                     _uiEffect.emit(UiEffect.ShowHitAnimation(coord))
                 }
                 is ShotOutcome.Sunk -> {
                     _uiState.update { it.copy(hitCount = it.hitCount + ShipRegistry.sizeOf(outcome.shipId)) }
+                    // Section 10: cannon fire + ship sunk groan
+                    soundManager.play(com.battleship.fleetcommand.core.ui.sound.GameSound.FIRE_CANNON)
+                    soundManager.play(com.battleship.fleetcommand.core.ui.sound.GameSound.SHIP_SUNK)
+                    // Section 15: SHOT_FIRED + SHIP_SUNK waveform
+                    hapticManager.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.SHOT_FIRED)
+                    hapticManager.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.SHIP_SUNK)
                     _uiEffect.emit(UiEffect.ShowSunkAnimation(coord, outcome.shipId))
                 }
             }
@@ -170,6 +190,9 @@ class BattleViewModel @Inject constructor(
 
             // Check win
             if (checkAllSunk(aiPlacements, myShotHistory)) {
+                // Section 10 + 15: victory fanfare + celebration haptic
+                soundManager.play(com.battleship.fleetcommand.core.ui.sound.GameSound.VICTORY)
+                hapticManager.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.VICTORY)
                 _uiEffect.emit(UiEffect.NavigateToGameOver(gameId, "Player"))
                 return@launch
             }
@@ -200,6 +223,9 @@ class BattleViewModel @Inject constructor(
 
         if (checkAllSunk(myPlacements, aiShotHistory)) {
             _uiState.update { it.copy(isAiThinking = false) }
+            // Section 10 + 15: defeat horn + defeat haptic
+            soundManager.play(com.battleship.fleetcommand.core.ui.sound.GameSound.DEFEAT)
+            hapticManager.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.DEFEAT)
             _uiEffect.emit(UiEffect.NavigateToGameOver(gameId, "AI"))
             return
         }

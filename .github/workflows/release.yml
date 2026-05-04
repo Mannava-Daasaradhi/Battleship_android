@@ -1,0 +1,123 @@
+# FILE: .github/workflows/release.yml
+# Section 20 — Play Store Release Pipeline
+#
+# Trigger: push of a version tag (e.g. v1.0.0)
+# Pipeline:
+#   1. Checkout + JDK setup
+#   2. Unit tests (must pass — gate before signing)
+#   3. Decode keystore from Base64 secret
+#   4. Build release AAB (signed)
+#   5. Upload to Play Store internal track via r0adkll/upload-google-play (free action)
+#   6. Cleanup keystore
+#   7. Upload AAB as workflow artifact (30-day retention)
+#
+# Required GitHub Secrets (Section 20):
+#   KEYSTORE_BASE64           — release.keystore encoded as Base64
+#   KEYSTORE_PASSWORD         — keystore password
+#   KEY_ALIAS                 — key alias
+#   KEY_PASSWORD              — key password
+#   SERVICE_ACCOUNT_JSON      — Google Play service account JSON (plain text)
+#
+# ⚠️  Ad Unit ID secrets are intentionally OMITTED — ads are not integrated yet.
+#     Add BANNER_AD_UNIT_ID, INTERSTITIAL_AD_UNIT_ID, REWARDED_AD_UNIT_ID
+#     to GitHub Secrets when the owner integrates AdMob (Section 14).
+# ──────────────────────────────────────────────────────────────────────────
+
+name: Release — Build & Deploy to Play Store
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'  # matches v1.0.0, v1.2.3, etc.
+
+# Prevent concurrent release builds overwriting each other
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build signed AAB + deploy to internal track
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history for changelog generation
+
+      # ── JDK ──────────────────────────────────────────────────────────────
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      # ── Android SDK ───────────────────────────────────────────────────────
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # ── Gradle permissions ────────────────────────────────────────────────
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      # ── Gradle cache ─────────────────────────────────────────────────────
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle.kts', '**/libs.versions.toml') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      # ── Unit tests (gate) ─────────────────────────────────────────────────
+      - name: Run unit tests
+        run: ./gradlew testReleaseUnitTest --stacktrace
+
+      # ── Keystore ─────────────────────────────────────────────────────────
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/release.keystore
+
+      # ── Build release AAB ─────────────────────────────────────────────────
+      - name: Build Release AAB
+        env:
+          KEYSTORE_PATH: release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ./gradlew bundleRelease \
+            -Pandroid.injected.signing.store.file=app/release.keystore \
+            -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
+            -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
+            -Pandroid.injected.signing.key.password=$KEY_PASSWORD \
+            --stacktrace
+
+      # ── Deploy to Play Store (internal track) ─────────────────────────────
+      # r0adkll/upload-google-play is a free, open-source GitHub Action (Section 20).
+      - name: Upload to Play Store — Internal Track
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+          packageName: com.battleship.fleetcommand
+          releaseFiles: app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: completed
+          whatsNewDirectory: distribution/whatsnew
+
+      # ── Keystore cleanup (always runs) ────────────────────────────────────
+      - name: Clean up keystore
+        if: always()
+        run: rm -f app/release.keystore
+
+      # ── Upload AAB artifact ───────────────────────────────────────────────
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-aab-${{ github.ref_name }}
+          path: app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30

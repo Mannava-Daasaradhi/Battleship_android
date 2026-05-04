@@ -2,8 +2,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Section 20 — Permissions with justification -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Justification: Firebase online multiplayer + Analytics -->
+
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Justification: Haptic feedback for game events (Section 15) -->
+
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Justification: Check network before Firebase connection attempts -->
 
     <application
         android:name=".BattleshipApplication"
@@ -14,6 +21,16 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.App.Starting"
         tools:targetApi="34">
+
+        <!--
+            Play Games Services App ID — Section 7.
+            ⚠️ Replace "000000000000" with your real App ID from:
+            Play Console → Play Games Services → Setup and management → Configuration
+            The ID is a numeric string, e.g. "123456789012"
+        -->
+        <meta-data
+            android:name="com.google.android.gms.games.APP_ID"
+            android:value="@string/app_id" />
 
         <activity
             android:name=".MainActivity"
