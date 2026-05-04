@@ -71,7 +71,7 @@ class PlacementViewModel @Inject constructor(
 
     sealed class UiEffect {
         data class NavigateToBattle(val gameId: String) : UiEffect()
-        data object NavigateToHandOff : UiEffect()
+        data class NavigateToHandOff(val gameId: String, val isP1HandOff: Boolean = false) : UiEffect()
         data class ShowPlacementError(val error: PlacementError) : UiEffect()
     }
 
@@ -163,17 +163,40 @@ class PlacementViewModel @Inject constructor(
         viewModelScope.launch {
             when (gameMode) {
                 GameMode.AI -> {
+                    // AI mode: playerSlot is always ONE (only human places manually)
                     val gameId = gameRepository.createGame(
                         com.battleship.fleetcommand.core.domain.model.Game(
                             mode = gameMode,
-                            player1Name = "Player", player2Name = "Player 2", id = java.util.UUID.randomUUID().toString(), startedAt = System.currentTimeMillis(),
+                            player1Name = "Player", player2Name = "AI",
+                            id = java.util.UUID.randomUUID().toString(),
+                            startedAt = System.currentTimeMillis(),
                         )
                     )
-                    gameRepository.saveBoardState(gameId, playerSlot, _uiState.value.placements)
+                    gameRepository.saveBoardState(gameId, PlayerSlot.ONE, _uiState.value.placements)
                     _uiEffect.emit(UiEffect.NavigateToBattle(gameId))
                 }
-                GameMode.LOCAL -> _uiEffect.emit(UiEffect.NavigateToHandOff)
-                GameMode.ONLINE -> _uiEffect.emit(UiEffect.NavigateToHandOff)
+                GameMode.LOCAL -> {
+                    if (playerSlot == PlayerSlot.ONE) {
+                        // P1 first: create the game, save P1 board, hand off to P2 placement
+                        val gameId = gameRepository.createGame(
+                            com.battleship.fleetcommand.core.domain.model.Game(
+                                mode = gameMode,
+                                player1Name = "Player 1", player2Name = "Player 2",
+                                id = java.util.UUID.randomUUID().toString(),
+                                startedAt = System.currentTimeMillis(),
+                            )
+                        )
+                        gameRepository.saveBoardState(gameId, PlayerSlot.ONE, _uiState.value.placements)
+                        // Hand off → P2 will place, then battle starts
+                        _uiEffect.emit(UiEffect.NavigateToHandOff(gameId, isP1HandOff = true))
+                    } else {
+                        // P2: game already exists — save P2 board then hand off to battle
+                        val gameId = route.gameId
+                        gameRepository.saveBoardState(gameId, PlayerSlot.TWO, _uiState.value.placements)
+                        _uiEffect.emit(UiEffect.NavigateToHandOff(gameId, isP1HandOff = false))
+                    }
+                }
+                GameMode.ONLINE -> _uiEffect.emit(UiEffect.NavigateToHandOff(route.gameId, isP1HandOff = false))
             }
         }
     }

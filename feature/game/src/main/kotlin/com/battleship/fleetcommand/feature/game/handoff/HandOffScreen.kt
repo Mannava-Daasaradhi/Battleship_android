@@ -55,7 +55,27 @@ fun HandOffScreen(
     LaunchedEffect(Unit) {
         viewModel.uiEffect.collectLatest { effect ->
             when (effect) {
-                HandOffViewModel.UiEffect.NavigateToNextScreen -> navController.popBackStack()
+                HandOffViewModel.UiEffect.NavigateToNextScreen -> {
+                    val gameId = route.gameId
+                    val mode = route.mode
+                    if (mode == "LOCAL" && route.isP1HandOff) {
+                        // After P1 handoff: navigate to P2 placement screen
+                        navController.navigate(
+                            com.battleship.fleetcommand.navigation.ShipPlacementRoute(
+                                mode = mode,
+                                playerSlot = 1,
+                                gameId = gameId,
+                            )
+                        )
+                    } else {
+                        // After P2 handoff (or AI/Online): start the battle
+                        navController.navigate(
+                            com.battleship.fleetcommand.navigation.BattleRoute(gameId = gameId)
+                        ) {
+                            popUpTo(com.battleship.fleetcommand.navigation.ModeSelectRoute) { inclusive = false }
+                        }
+                    }
+                }
             }
         }
     }

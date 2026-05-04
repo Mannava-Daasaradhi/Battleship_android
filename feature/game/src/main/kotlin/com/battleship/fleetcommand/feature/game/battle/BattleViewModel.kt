@@ -96,6 +96,9 @@ class BattleViewModel @Inject constructor(
     private var aiPlacements: List<ShipPlacement> = emptyList()
     private var myShotHistory: MutableSet<Coord> = mutableSetOf()
     private var aiShotHistory: MutableSet<Coord> = mutableSetOf()
+    // Atomic guard — set synchronously before any coroutine launch to prevent tap-spam
+    private var isProcessingShot = false
+    private var shotIndex = 0
 
     init {
         viewModelScope.launch {
@@ -143,42 +146,52 @@ class BattleViewModel @Inject constructor(
 
     private fun handlePlayerShot(coord: Coord) {
         val state = _uiState.value
-        if (!state.isMyTurn || state.isAnimating || coord in myShotHistory) return
+        // Guard checked synchronously on the main thread — prevents tap spam races
+        if (!state.isMyTurn || state.isAnimating || isProcessingShot || coord in myShotHistory) return
+        isProcessingShot = true  // set BEFORE launching coroutine
 
         viewModelScope.launch {
-            _uiState.update { it.copy(isAnimating = true, shotCount = it.shotCount + 1) }
+            _uiState.update { it.copy(isAnimating = true, isMyTurn = false, shotCount = it.shotCount + 1) }
             myShotHistory.add(coord)
 
             val outcome = withContext(Dispatchers.Default) {
                 gameEngine.fireShot(coord, aiPlacements, myShotHistory - coord)
             }.getOrElse { ShotOutcome.Miss }
 
+            // Persist the shot so GameOverScreen can show accuracy stats
+            val fireResult = outcome.toFireResult()
+            gameRepository.saveShot(
+                gameId,
+                com.battleship.fleetcommand.core.domain.model.Shot(
+                    gameId     = gameId,
+                    shotIndex  = shotIndex++,
+                    coord      = coord,
+                    result     = fireResult,
+                    firedBy    = PlayerSlot.ONE,
+                    timestamp  = System.currentTimeMillis(),
+                )
+            )
+
             when (outcome) {
                 is ShotOutcome.Miss -> {
-                    // Section 10: cannon fire SFX on shot; splash on miss
                     soundManager.play(com.battleship.fleetcommand.core.ui.sound.GameSound.FIRE_CANNON)
                     soundManager.play(com.battleship.fleetcommand.core.ui.sound.GameSound.MISS_SPLASH)
-                    // Section 15: SHOT_FIRED tick + MISS tick
                     hapticManager.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.SHOT_FIRED)
                     hapticManager.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.MISS)
                     _uiEffect.emit(UiEffect.ShowMissAnimation(coord))
                 }
                 is ShotOutcome.Hit -> {
                     _uiState.update { it.copy(hitCount = it.hitCount + 1) }
-                    // Section 10: cannon fire + explosion
                     soundManager.play(com.battleship.fleetcommand.core.ui.sound.GameSound.FIRE_CANNON)
                     soundManager.play(com.battleship.fleetcommand.core.ui.sound.GameSound.HIT_EXPLOSION)
-                    // Section 15: SHOT_FIRED tick + HIT pulse
                     hapticManager.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.SHOT_FIRED)
                     hapticManager.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.HIT)
                     _uiEffect.emit(UiEffect.ShowHitAnimation(coord))
                 }
                 is ShotOutcome.Sunk -> {
                     _uiState.update { it.copy(hitCount = it.hitCount + ShipRegistry.sizeOf(outcome.shipId)) }
-                    // Section 10: cannon fire + ship sunk groan
                     soundManager.play(com.battleship.fleetcommand.core.ui.sound.GameSound.FIRE_CANNON)
                     soundManager.play(com.battleship.fleetcommand.core.ui.sound.GameSound.SHIP_SUNK)
-                    // Section 15: SHOT_FIRED + SHIP_SUNK waveform
                     hapticManager.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.SHOT_FIRED)
                     hapticManager.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.SHIP_SUNK)
                     _uiEffect.emit(UiEffect.ShowSunkAnimation(coord, outcome.shipId))
@@ -190,14 +203,15 @@ class BattleViewModel @Inject constructor(
 
             // Check win
             if (checkAllSunk(aiPlacements, myShotHistory)) {
-                // Section 10 + 15: victory fanfare + celebration haptic
                 soundManager.play(com.battleship.fleetcommand.core.ui.sound.GameSound.VICTORY)
                 hapticManager.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.VICTORY)
+                isProcessingShot = false
                 _uiEffect.emit(UiEffect.NavigateToGameOver(gameId, "Player"))
                 return@launch
             }
 
-            _uiState.update { it.copy(isAnimating = false, isMyTurn = false, isAiThinking = true) }
+            isProcessingShot = false
+            _uiState.update { it.copy(isAnimating = false, isAiThinking = true) }
             delay(600) // AI "thinking" delay
             performAiShot()
         }
@@ -205,7 +219,6 @@ class BattleViewModel @Inject constructor(
 
     private suspend fun performAiShot() {
         val coord = withContext(Dispatchers.Default) {
-            // Simple random AI for now; real AI injected via AiTurnProcessor in full integration
             var candidate: Coord
             do {
                 val idx = (0 until GameConstants.TOTAL_CELLS).random()
@@ -219,11 +232,23 @@ class BattleViewModel @Inject constructor(
             gameEngine.fireShot(coord, myPlacements, aiShotHistory - coord)
         }.getOrElse { ShotOutcome.Miss }
 
+        // Persist AI shot so GameOverScreen stats are accurate
+        gameRepository.saveShot(
+            gameId,
+            com.battleship.fleetcommand.core.domain.model.Shot(
+                gameId     = gameId,
+                shotIndex  = shotIndex++,
+                coord      = coord,
+                result     = outcome.toFireResult(),
+                firedBy    = PlayerSlot.TWO,
+                timestamp  = System.currentTimeMillis(),
+            )
+        )
+
         refreshBoards()
 
         if (checkAllSunk(myPlacements, aiShotHistory)) {
             _uiState.update { it.copy(isAiThinking = false) }
-            // Section 10 + 15: defeat horn + defeat haptic
             soundManager.play(com.battleship.fleetcommand.core.ui.sound.GameSound.DEFEAT)
             hapticManager.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.DEFEAT)
             _uiEffect.emit(UiEffect.NavigateToGameOver(gameId, "AI"))

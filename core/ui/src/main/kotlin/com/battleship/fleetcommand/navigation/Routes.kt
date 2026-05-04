@@ -13,7 +13,11 @@ import kotlinx.serialization.Serializable
     val gameId: String = "",
 )
 @Serializable data class BattleRoute(val gameId: String)
-@Serializable object HandOffRoute
+@Serializable data class HandOffRoute(
+    val gameId: String = "",
+    val mode: String = "",
+    val isP1HandOff: Boolean = false,
+)
 @Serializable data class GameOverRoute(val gameId: String, val winner: String)
 @Serializable object OnlineLobbyRoute
 @Serializable data class WaitingForOpponentRoute(val gameId: String)

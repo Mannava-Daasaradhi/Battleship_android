@@ -47,8 +47,14 @@ fun ShipPlacementScreen(
                     navController.navigate(BattleRoute(gameId = effect.gameId)) {
                         popUpTo(com.battleship.fleetcommand.navigation.ModeSelectRoute) { inclusive = false }
                     }
-                PlacementViewModel.UiEffect.NavigateToHandOff ->
-                    navController.navigate(HandOffRoute)
+                is PlacementViewModel.UiEffect.NavigateToHandOff ->
+                    navController.navigate(
+                        HandOffRoute(
+                            gameId = effect.gameId,
+                            mode = route.mode,
+                            isP1HandOff = effect.isP1HandOff,
+                        )
+                    )
                 is PlacementViewModel.UiEffect.ShowPlacementError -> { /* snackbar / shake — future */ }
             }
         }
