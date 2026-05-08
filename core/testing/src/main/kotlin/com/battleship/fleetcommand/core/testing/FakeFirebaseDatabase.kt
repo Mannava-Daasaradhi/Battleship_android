@@ -1,4 +1,4 @@
-// core/testing/src/main/kotlin/com/battleship/fleetcommand/core/testing/FakeFirebaseDatabase.kt
+// FILE: core/testing/src/main/kotlin/com/battleship/fleetcommand/core/testing/FakeFirebaseDatabase.kt
 
 package com.battleship.fleetcommand.core.testing
 
@@ -21,6 +21,11 @@ import java.util.UUID
  * Pure Kotlin in-memory fake implementing [FirebaseMatchRepository].
  * No Firebase dependencies — safe for pure JVM unit tests.
  * Test helpers allow injecting opponent actions without touching Firebase.
+ *
+ * Mirrors real production behaviour:
+ *  - joinGame advances status "waiting" → "setup" (both in lobby).
+ *  - submitShipPlacement advances status "setup" → "battle" when both players ready.
+ *  - joinGame is idempotent: if myUid == existing guestUid, re-join succeeds.
  */
 class FakeFirebaseDatabase : FirebaseMatchRepository {
 
@@ -84,11 +89,25 @@ class FakeFirebaseDatabase : FirebaseMatchRepository {
             it.roomCode.equals(roomCode.trim().uppercase(), ignoreCase = false)
         }
         when {
-            node == null              -> emit(JoinResult.NotFound)
+            node == null -> emit(JoinResult.NotFound)
+
+            // Idempotent re-join: the guest is already us (e.g. retry after network blip).
+            node.guestUid == myUid -> {
+                // Just refresh player data and re-emit success.
+                node.players[myUid] = PlayerNode(name = playerName)
+                stateFlows[node.gameId]?.value = node
+                emit(JoinResult.Success(gameId = node.gameId))
+            }
+
+            // Another guest is already in the slot, or game is not in a joinable state.
+            node.guestUid != null -> emit(JoinResult.GameAlreadyStarted)
             node.status != "waiting" -> emit(JoinResult.GameAlreadyStarted)
+
             else -> {
+                // Claim the guest slot and advance status waiting → setup.
                 node.guestUid = myUid
                 node.players[myUid] = PlayerNode(name = playerName)
+                node.status = "setup"   // mirrors MatchmakingRepository.joinGame Step 7
                 stateFlows[node.gameId]?.value = node
                 emit(JoinResult.Success(gameId = node.gameId))
             }
@@ -107,6 +126,16 @@ class FakeFirebaseDatabase : FirebaseMatchRepository {
         val node = games[gameId] ?: return Result.failure(Exception("Game not found: $gameId"))
         node.ships[myUid] = ships.size.toString() // simplified — just record it was submitted
         node.players[myUid]?.ready = true
+
+        // Advance status "setup" → "battle" when both players are ready.
+        // Mirrors FirebaseMatchRepositoryImpl.submitShipPlacement ready-check logic.
+        if (node.status == "setup" &&
+            node.players.size >= 2 &&
+            node.players.values.all { it.ready }
+        ) {
+            node.status = "battle"
+        }
+
         stateFlows[gameId]?.value = node
         return Result.success(Unit)
     }

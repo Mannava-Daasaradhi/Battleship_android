@@ -1,3 +1,5 @@
+// FILE: feature/lobby/src/main/kotlin/com/battleship/fleetcommand/feature/lobby/WaitingForOpponentScreen.kt
+
 package com.battleship.fleetcommand.feature.lobby
 
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -58,14 +60,28 @@ fun WaitingForOpponentScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    // ── Initialise Firebase observer (idempotent — only runs once per gameId) ─
     LaunchedEffect(gameId) {
         viewModel.init(gameId)
     }
 
-    LaunchedEffect(uiState.bothReady) {
-        if (uiState.bothReady) {
-            navController.navigate(ShipPlacementRoute(mode = "ONLINE", gameId = gameId)) {
-                popUpTo(navController.graph.startDestinationId) { inclusive = false }
+    // ── One-shot navigation via UiEffect channel ──────────────────────────────
+    // Using a Channel-based effect (not LaunchedEffect(uiState.bothReady)) avoids
+    // the double-navigation bug that occurred when Compose re-ran the LaunchedEffect
+    // on recomposition while bothReady was still true after the first navigation.
+    // Channel(BUFFERED) + receiveAsFlow() guarantees delivery exactly once.
+    LaunchedEffect(Unit) {
+        viewModel.effects.collect { effect ->
+            when (effect) {
+                is WaitingUiEffect.NavigateToShipPlacement -> {
+                    navController.navigate(ShipPlacementRoute(mode = "ONLINE", gameId = effect.gameId)) {
+                        // Remove WaitingForOpponentScreen and OnlineLobbyScreen from
+                        // back stack so pressing Back from ShipPlacement doesn't loop
+                        // back into the lobby. Keep MainMenuRoute so the user can
+                        // ultimately return to the main menu.
+                        popUpTo(navController.graph.startDestinationId) { inclusive = false }
+                    }
+                }
             }
         }
     }

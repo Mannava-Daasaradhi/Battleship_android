@@ -92,16 +92,26 @@ class MatchmakingRepository @Inject constructor(
     //  1. Read /roomCodes/{code}/gameId
     //     Allowed: .read = auth != null (no participant check needed)
     //
-    //  2. Write /games/{gameId}/meta/guestUid = myUid
-    //     Allowed by meta .write rule: data.guestUid === null && newData.guestUid === auth.uid
-    //     MUST happen before any read of /games/{gameId} — the $gameId .read rule
-    //     only grants access to participants (hostUid or guestUid). Writing guestUid
-    //     first makes the guest a participant.
+    //  2. Read current guestUid from /games/{gameId}/meta.
+    //     • If guestUid == myUid  → we already joined (idempotent re-join after
+    //       a network blip or the user pressing Back and retrying). Skip the write
+    //       and proceed to Step 4 directly.
+    //     • If guestUid is non-null and != myUid → someone else is the guest →
+    //       return GameAlreadyStarted immediately (before writing anything).
+    //     • If guestUid is null → claim the slot by writing myUid (Step 3).
     //
-    //  3. Read /games/{gameId}/meta to verify status
+    //  3. Write /games/{gameId}/meta/guestUid = myUid
+    //     Allowed by meta .write rule: data.guestUid === null && newData.guestUid === auth.uid
+    //     If the write is rejected another guest grabbed the slot concurrently → GameAlreadyStarted.
+    //
+    //  4. Read /games/{gameId}/meta to verify status
     //     Now allowed: guestUid === myUid satisfies $gameId .read rule.
     //
-    //  4. If status is not "waiting", undo by clearing guestUid and return error.
+    //  5. If status is not "waiting" (and we wrote guestUid in Step 3), undo by
+    //     clearing guestUid and return GameAlreadyStarted.
+    //
+    //  6. Write player node. Advance status "waiting" → "setup" so both
+    //     WaitingForOpponentViewModels know to move to ship placement.
     //
     suspend fun joinGame(roomCode: String, playerName: String): JoinResult {
         return try {
@@ -110,7 +120,6 @@ class MatchmakingRepository @Inject constructor(
                 val normalised = roomCode.uppercase().trim()
 
                 // ── Step 1: resolve roomCode → gameId via the /roomCodes index ────
-                // This read is allowed for any authenticated user (.read: auth != null).
                 val gameIdSnapshot = database
                     .getReference(FirebaseSchema.ROOM_CODES)
                     .child(normalised)
@@ -127,24 +136,52 @@ class MatchmakingRepository @Inject constructor(
                 val gameRef = database.getReference("${FirebaseSchema.GAMES}/$gameId")
                 val metaRef = gameRef.child(FirebaseSchema.META)
 
-                // ── Step 2: write guestUid FIRST ──────────────────────────────────
-                // The meta .write rule allows this when guestUid is null.
-                // If another guest already claimed this slot, the write fails →
-                // we catch it below as GameAlreadyStarted.
-                // We MUST do this before reading /games/{gameId} because the $gameId
-                // .read rule only grants access to participants (hostUid or guestUid).
-                try {
-                    metaRef.child(FirebaseSchema.GUEST_UID).setValue(myUid).await()
-                } catch (writeEx: Exception) {
-                    Timber.d("MatchmakingRepository: joinGame guestUid write denied gameId=$gameId — game full or already started")
-                    return@withTimeout JoinResult.GameAlreadyStarted
+                // ── Step 2: check existing guestUid before attempting write ────────
+                // We need to read meta first. If we're not yet a participant we only
+                // have access to /roomCodes, NOT to /games/{gameId}. However, the
+                // Firebase security rule allows us to read/write guestUid when it is
+                // null (the meta .write rule). We attempt the write; if it fails the
+                // guest slot is taken.
+                //
+                // Optimisation: try to read the meta directly (will fail if security
+                // rules block it and guestUid is null — fall through to write attempt).
+                val existingGuestUid: String? = try {
+                    metaRef.child(FirebaseSchema.GUEST_UID).get().await()
+                        .getValue(String::class.java)
+                } catch (_: Exception) {
+                    // Not yet a participant — we can't read meta yet. Proceed to write.
+                    null
                 }
 
-                // ── Step 3: now we are a participant — read meta to check status ──
+                when {
+                    existingGuestUid == myUid -> {
+                        // ── Idempotent re-join: we already claimed this slot ──────────
+                        // (e.g. user pressed Back and retried, or a network retry).
+                        // Skip the write; proceed directly to player-node and status update.
+                        Timber.d("MatchmakingRepository: joinGame idempotent re-join gameId=$gameId")
+                    }
+
+                    existingGuestUid != null -> {
+                        // Another player has already claimed the guest slot.
+                        Timber.d("MatchmakingRepository: joinGame guest slot taken gameId=$gameId existingGuest=$existingGuestUid")
+                        return@withTimeout JoinResult.GameAlreadyStarted
+                    }
+
+                    else -> {
+                        // ── Step 3: guestUid is null — claim the slot ─────────────────
+                        try {
+                            metaRef.child(FirebaseSchema.GUEST_UID).setValue(myUid).await()
+                        } catch (writeEx: Exception) {
+                            Timber.d("MatchmakingRepository: joinGame guestUid write denied gameId=$gameId — game full or already started")
+                            return@withTimeout JoinResult.GameAlreadyStarted
+                        }
+                    }
+                }
+
+                // ── Step 4: read meta to verify status ────────────────────────────
                 val metaSnapshot = metaRef.get().await()
 
                 if (!metaSnapshot.exists()) {
-                    // Game was deleted between steps — undo is moot, just report not found.
                     Timber.w("MatchmakingRepository: joinGame meta missing after guestUid write gameId=$gameId")
                     return@withTimeout JoinResult.NotFound
                 }
@@ -153,19 +190,23 @@ class MatchmakingRepository @Inject constructor(
                     .child(FirebaseSchema.STATUS)
                     .getValue(String::class.java)
 
-                if (status != FirebaseSchema.STATUS_WAITING) {
-                    // Race condition: game moved out of waiting between our write and this
-                    // read. Clear our guestUid so we don't block the host.
-                    Timber.d("MatchmakingRepository: joinGame gameId=$gameId status=$status — not waiting, rolling back")
-                    try {
-                        metaRef.child(FirebaseSchema.GUEST_UID).setValue(null).await()
-                    } catch (rollbackEx: Exception) {
-                        Timber.w(rollbackEx, "MatchmakingRepository: joinGame rollback failed gameId=$gameId")
+                // ── Step 5: bail out if game is not in a joinable state ───────────
+                // "waiting" is joinable. "setup" is joinable only if this is our own
+                // UID (idempotent re-join handled above). Any other status → reject.
+                if (status != FirebaseSchema.STATUS_WAITING && status != FirebaseSchema.STATUS_SETUP) {
+                    Timber.d("MatchmakingRepository: joinGame gameId=$gameId status=$status — not joinable, rolling back guestUid")
+                    // Only roll back if we were the one who wrote guestUid (existingGuestUid was null).
+                    if (existingGuestUid == null) {
+                        try {
+                            metaRef.child(FirebaseSchema.GUEST_UID).setValue(null).await()
+                        } catch (rollbackEx: Exception) {
+                            Timber.w(rollbackEx, "MatchmakingRepository: joinGame rollback failed gameId=$gameId")
+                        }
                     }
                     return@withTimeout JoinResult.GameAlreadyStarted
                 }
 
-                // ── Step 4: write our player node ────────────────────────────────
+                // ── Step 6: write player node ─────────────────────────────────────
                 val playerData = mapOf(
                     FirebaseSchema.PLAYER_NAME      to playerName,
                     FirebaseSchema.PLAYER_READY     to false,
@@ -178,6 +219,25 @@ class MatchmakingRepository @Inject constructor(
                     .onDisconnect().setValue(false)
                 gameRef.child("${FirebaseSchema.PLAYERS}/$myUid/${FirebaseSchema.PLAYER_LAST_SEEN}")
                     .onDisconnect().setValue(ServerValue.TIMESTAMP)
+
+                // ── Step 7: advance status "waiting" → "setup" ────────────────────
+                // This is the critical transition that unblocks both devices'
+                // WaitingForOpponentScreen. Without it, neither device ever moves past
+                // the "waiting for opponent" spinner because bothReady only fires on
+                // "setup" (both ready) or "battle". "waiting" → "setup" signals that
+                // both players are in the lobby and can start placing ships.
+                if (status == FirebaseSchema.STATUS_WAITING) {
+                    try {
+                        metaRef.child(FirebaseSchema.STATUS)
+                            .setValue(FirebaseSchema.STATUS_SETUP)
+                            .await()
+                        Timber.d("MatchmakingRepository: joinGame advanced status waiting→setup gameId=$gameId")
+                    } catch (statusEx: Exception) {
+                        // Non-fatal: status advancement failed. WaitingForOpponentScreen will
+                        // still show "Opponent connected" once the player node is present.
+                        Timber.w(statusEx, "MatchmakingRepository: joinGame status advancement failed gameId=$gameId")
+                    }
+                }
 
                 Timber.d("MatchmakingRepository: joinGame success gameId=$gameId")
                 JoinResult.Success(gameId = gameId)

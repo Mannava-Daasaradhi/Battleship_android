@@ -1,4 +1,4 @@
-// core/multiplayer/src/main/kotlin/com/battleship/fleetcommand/core/multiplayer/repository/FirebaseMatchRepositoryImpl.kt
+// FILE: core/multiplayer/src/main/kotlin/com/battleship/fleetcommand/core/multiplayer/repository/FirebaseMatchRepositoryImpl.kt
 
 package com.battleship.fleetcommand.core.multiplayer.repository
 
@@ -86,6 +86,11 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
     // ── submitShipPlacement ───────────────────────────────────────────────────
     // Serialises List<ShipPlacement> -> List<ShipPlacementDto> -> JSON string.
     // ShipPlacement and Coord are NOT @Serializable so we map to DTO first.
+    //
+    // After marking this player ready, reads the players node to check whether
+    // both participants are now ready. If so, advances status "setup" → "battle"
+    // so both devices' WaitingForOpponentViewModels (if still watching) and
+    // OnlineGameViewModels transition to the battle phase.
     override suspend fun submitShipPlacement(
         gameId: String,
         ships: List<ShipPlacement>
@@ -111,6 +116,40 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
                 .setValue(true).await()
 
             Timber.d("FirebaseMatchRepositoryImpl: submitShipPlacement success gameId=$gameId uid=$myUid")
+
+            // ── Check if both players are now ready → advance to "battle" ────────
+            // Read the full players node and check every player's ready flag.
+            // Two players must be present and both ready before we advance status.
+            try {
+                val playersSnapshot = gameRef.child(FirebaseSchema.PLAYERS).get().await()
+                val playerEntries = playersSnapshot.children.toList()
+                val bothReady = playerEntries.size >= 2 &&
+                        playerEntries.all { playerSnap ->
+                            playerSnap.child(FirebaseSchema.PLAYER_READY)
+                                .getValue(Boolean::class.java) == true
+                        }
+
+                if (bothReady) {
+                    val metaRef = gameRef.child(FirebaseSchema.META)
+                    // Only advance if currently in "setup" to avoid overwriting "finished".
+                    val currentStatus = metaRef.child(FirebaseSchema.STATUS)
+                        .get().await()
+                        .getValue(String::class.java)
+
+                    if (currentStatus == FirebaseSchema.STATUS_SETUP) {
+                        metaRef.child(FirebaseSchema.STATUS)
+                            .setValue(FirebaseSchema.STATUS_BATTLE)
+                            .await()
+                        Timber.d("FirebaseMatchRepositoryImpl: submitShipPlacement both ready — advanced status setup→battle gameId=$gameId")
+                    }
+                }
+            } catch (readyCheckEx: Exception) {
+                // Non-fatal: the "battle" advancement is best-effort here.
+                // The second player's device will also call submitShipPlacement and
+                // will attempt the same check, so one of the two devices will succeed.
+                Timber.w(readyCheckEx, "FirebaseMatchRepositoryImpl: submitShipPlacement ready-check failed gameId=$gameId")
+            }
+
             Result.success(Unit)
         } catch (e: Exception) {
             Timber.e(e, "FirebaseMatchRepositoryImpl: submitShipPlacement failed")
