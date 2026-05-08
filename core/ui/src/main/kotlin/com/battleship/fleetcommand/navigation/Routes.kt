@@ -15,6 +15,17 @@ import kotlinx.serialization.Serializable
     val player2Name: String = "Player 2",
 )
 @Serializable data class BattleRoute(val gameId: String)
+
+/**
+ * Dedicated route for online (Firebase) battles.
+ * Carries the Firebase gameId and the local player's UID so OnlineGameViewModel
+ * can initialise without an async auth call.
+ */
+@Serializable data class OnlineBattleRoute(
+    val gameId: String,
+    val myUid: String,
+)
+
 @Serializable data class HandOffRoute(
     val gameId: String = "",
     val mode: String = "",

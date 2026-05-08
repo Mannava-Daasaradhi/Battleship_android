@@ -1,3 +1,4 @@
+// FILE: app/src/main/kotlin/com/battleship/fleetcommand/navigation/BattleshipNavHost.kt
 package com.battleship.fleetcommand.navigation
 
 import androidx.compose.animation.core.Spring
@@ -19,6 +20,7 @@ import androidx.navigation.toRoute
 import com.battleship.fleetcommand.feature.game.battle.BattleScreen
 import com.battleship.fleetcommand.feature.game.gameover.GameOverScreen
 import com.battleship.fleetcommand.feature.game.handoff.HandOffScreen
+import com.battleship.fleetcommand.feature.game.online.OnlineBattleScreen
 import com.battleship.fleetcommand.feature.lobby.OnlineLobbyScreen
 import com.battleship.fleetcommand.feature.lobby.WaitingForOpponentScreen
 import com.battleship.fleetcommand.feature.menu.DifficultyScreen
@@ -78,9 +80,23 @@ fun BattleshipNavHost(modifier: Modifier = Modifier) {
             HandOffScreen(navController = navController, viewModel = hiltViewModel(), route = route)
         }
 
+        // ── AI and Pass-&-Play battles ─────────────────────────────────────────
         composable<BattleRoute> { backStackEntry ->
             val route = backStackEntry.toRoute<BattleRoute>()
             BattleScreen(navController = navController, viewModel = hiltViewModel(), route = route)
+        }
+
+        // ── Online (Firebase) battles — dedicated route + dedicated ViewModel ──
+        // OnlineBattleRoute carries gameId AND myUid so OnlineGameViewModel needs
+        // no async auth call to initialise. BattleRoute/BattleViewModel is NOT used
+        // for online games — they have no Firebase awareness.
+        composable<OnlineBattleRoute> { backStackEntry ->
+            val route = backStackEntry.toRoute<OnlineBattleRoute>()
+            OnlineBattleScreen(
+                navController = navController,
+                viewModel     = hiltViewModel(),
+                route         = route,
+            )
         }
 
         composable<OnlineLobbyRoute> {
@@ -93,7 +109,7 @@ fun BattleshipNavHost(modifier: Modifier = Modifier) {
                 navController = navController,
                 viewModel     = hiltViewModel(),
                 gameId        = route.gameId,
-                roomCode      = route.roomCode,   // now forwarded to screen
+                roomCode      = route.roomCode,
             )
         }
 

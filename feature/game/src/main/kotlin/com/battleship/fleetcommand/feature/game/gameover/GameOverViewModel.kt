@@ -1,6 +1,3 @@
-// ============================================================
-// feature/game/src/main/kotlin/com/battleship/fleetcommand/feature/game/gameover/GameOverViewModel.kt
-// ============================================================
 // FILE: feature/game/src/main/kotlin/com/battleship/fleetcommand/feature/game/gameover/GameOverViewModel.kt
 package com.battleship.fleetcommand.feature.game.gameover
 
@@ -83,9 +80,24 @@ class GameOverViewModel @Inject constructor(
         val gameId = route.gameId
         val winner = route.winner
 
-        // winner == "AI" means AI won in single-player; any other value is a player name
-        _uiState.update { it.copy(winner = winner, isPlayerWin = winner != "AI") }
+        // Determine if the local player won:
+        //   - Online games pass "You" for local win, opponent name for loss.
+        //   - AI games pass "AI" for AI win, "Player" for player win.
+        //   - Local pass-and-play passes the player name who won.
+        // So: "You" or anything that isn't "AI" and isn't blank is a player win.
+        // For online specifically we pass "You" when the local player wins.
+        val isPlayerWin = when {
+            winner == "You"   -> true    // online: local player won
+            winner == "AI"    -> false   // single player: AI won
+            winner.isBlank()  -> false   // safety: no winner string
+            else              -> true    // single/local: player name = win
+        }
 
+        _uiState.update { it.copy(winner = winner, isPlayerWin = isPlayerWin) }
+
+        // If no local gameId (online game), or blank → skip Room DB query.
+        // Online game boards are in Firebase; we cannot retrieve them from Room.
+        // The result card still shows VICTORY/DEFEATED with the winner name.
         if (gameId.isBlank()) {
             _uiState.update { it.copy(isLoading = false) }
             return

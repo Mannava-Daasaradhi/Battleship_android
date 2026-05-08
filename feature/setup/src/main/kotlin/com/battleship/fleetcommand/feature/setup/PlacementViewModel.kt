@@ -10,8 +10,10 @@ import com.battleship.fleetcommand.core.domain.Coord
 import com.battleship.fleetcommand.core.domain.GameConstants
 import com.battleship.fleetcommand.core.domain.Orientation
 import com.battleship.fleetcommand.core.domain.model.GameMode
+import com.battleship.fleetcommand.core.domain.multiplayer.FirebaseMatchRepository
 import com.battleship.fleetcommand.core.domain.player.PlayerSlot
 import com.battleship.fleetcommand.core.domain.repository.GameRepository
+import com.battleship.fleetcommand.core.domain.repository.PreferencesRepository
 import com.battleship.fleetcommand.core.domain.ship.AdjacencyMode
 import com.battleship.fleetcommand.core.domain.ship.PlacementError
 import com.battleship.fleetcommand.core.domain.ship.PlacementValidator
@@ -32,15 +34,19 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
 class PlacementViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val gameRepository: GameRepository,
+    private val firebaseMatchRepository: FirebaseMatchRepository,
+    private val preferencesRepository: PreferencesRepository,
 ) : ViewModel() {
 
     private val route: ShipPlacementRoute = savedStateHandle.toRoute()
@@ -60,6 +66,7 @@ class PlacementViewModel @Inject constructor(
         val orientations: Map<ShipId, Orientation> = ShipRegistry.ALL.associate { it.id to Orientation.Horizontal },
         val canConfirm: Boolean = false,
         val isAutoPlacing: Boolean = false,
+        val isSubmitting: Boolean = false,
         val playerName: String = "Player",
         val mode: GameMode = GameMode.AI,
         val selectedShipId: ShipId? = null,
@@ -82,12 +89,14 @@ class PlacementViewModel @Inject constructor(
 
     sealed class UiEffect {
         data class NavigateToBattle(val gameId: String) : UiEffect()
+        data class NavigateToOnlineBattle(val gameId: String, val myUid: String) : UiEffect()
         data class NavigateToHandOff(
             val gameId: String,
             val isP1HandOff: Boolean = false,
             val phase: String = "SETUP",
         ) : UiEffect()
         data class ShowPlacementError(val error: PlacementError) : UiEffect()
+        data class ShowError(val message: String) : UiEffect()
     }
 
     private val _uiState = MutableStateFlow(UiState(mode = gameMode))
@@ -228,6 +237,7 @@ class PlacementViewModel @Inject constructor(
 
     private fun confirmPlacement() {
         if (!_uiState.value.canConfirm) return
+        if (_uiState.value.isSubmitting) return
         viewModelScope.launch {
             when (gameMode) {
                 GameMode.AI -> {
@@ -242,9 +252,9 @@ class PlacementViewModel @Inject constructor(
                     gameRepository.saveBoardState(gameId, PlayerSlot.ONE, _uiState.value.placements)
                     _uiEffect.emit(UiEffect.NavigateToBattle(gameId))
                 }
+
                 GameMode.LOCAL -> {
                     if (playerSlot == PlayerSlot.ONE) {
-                        // P1 first: create the game with real player names, save P1 board, hand off to P2
                         val gameId = gameRepository.createGame(
                             com.battleship.fleetcommand.core.domain.model.Game(
                                 mode = gameMode,
@@ -255,18 +265,55 @@ class PlacementViewModel @Inject constructor(
                             )
                         )
                         gameRepository.saveBoardState(gameId, PlayerSlot.ONE, _uiState.value.placements)
-                        // FIX: phase = "SETUP" so HandOffScreen knows to go to P2 placement, not BattleScreen
                         _uiEffect.emit(UiEffect.NavigateToHandOff(gameId, isP1HandOff = true, phase = "SETUP"))
                     } else {
-                        // P2: game already exists — save P2 board then navigate to battle
                         val gameId = route.gameId
                         gameRepository.saveBoardState(gameId, PlayerSlot.TWO, _uiState.value.placements)
-                        // isP1HandOff = FALSE → HandOffScreen sees phase="SETUP" && !isP1HandOff
-                        // → navigates forward to BattleRoute (not back to P2 placement)
                         _uiEffect.emit(UiEffect.NavigateToHandOff(gameId, isP1HandOff = false, phase = "SETUP"))
                     }
                 }
-                GameMode.ONLINE -> _uiEffect.emit(UiEffect.NavigateToHandOff(route.gameId, isP1HandOff = false, phase = "SETUP"))
+
+                GameMode.ONLINE -> {
+                    // ── Online placement confirmed ────────────────────────────────
+                    // 1. Get the Firebase gameId from the route (passed from WaitingForOpponentScreen)
+                    // 2. Submit ships to Firebase Realtime Database
+                    // 3. Also save to Room so GameOverScreen can display board history
+                    // 4. Navigate to OnlineBattleRoute (dedicated online battle screen)
+                    //
+                    // We do NOT go through HandOffScreen for online — there is no local handoff needed.
+                    val firebaseGameId = route.gameId
+                    if (firebaseGameId.isBlank()) {
+                        Timber.e("PlacementViewModel: ONLINE confirmPlacement — gameId is blank!")
+                        _uiEffect.emit(UiEffect.ShowError("Game session lost. Please restart."))
+                        return@launch
+                    }
+
+                    _uiState.update { it.copy(isSubmitting = true) }
+
+                    val myUid = preferencesRepository.getOnlinePlayerUid() ?: run {
+                        _uiState.update { it.copy(isSubmitting = false) }
+                        _uiEffect.emit(UiEffect.ShowError("Authentication lost. Please restart."))
+                        return@launch
+                    }
+
+                    // Submit to Firebase
+                    val result = firebaseMatchRepository.submitShipPlacement(
+                        gameId = firebaseGameId,
+                        ships  = _uiState.value.placements
+                    )
+
+                    _uiState.update { it.copy(isSubmitting = false) }
+
+                    if (result.isFailure) {
+                        val msg = result.exceptionOrNull()?.message ?: "Failed to submit ships. Check your connection."
+                        Timber.e(result.exceptionOrNull(), "PlacementViewModel: submitShipPlacement failed")
+                        _uiEffect.emit(UiEffect.ShowError(msg))
+                        return@launch
+                    }
+
+                    Timber.d("PlacementViewModel: ONLINE ships submitted — navigating to OnlineBattle gameId=$firebaseGameId myUid=$myUid")
+                    _uiEffect.emit(UiEffect.NavigateToOnlineBattle(firebaseGameId, myUid))
+                }
             }
         }
     }

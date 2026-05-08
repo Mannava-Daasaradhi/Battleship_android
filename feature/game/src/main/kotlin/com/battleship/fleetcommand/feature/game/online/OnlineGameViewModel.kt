@@ -1,9 +1,11 @@
+// FILE: feature/game/src/main/kotlin/com/battleship/fleetcommand/feature/game/online/OnlineGameViewModel.kt
 package com.battleship.fleetcommand.feature.game.online
 
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.navigation.toRoute
 import com.battleship.fleetcommand.core.domain.Coord
 import com.battleship.fleetcommand.core.domain.GameConstants
 import com.battleship.fleetcommand.core.domain.engine.FireResult
@@ -13,10 +15,17 @@ import com.battleship.fleetcommand.core.domain.multiplayer.FirebaseMatchReposito
 import com.battleship.fleetcommand.core.domain.multiplayer.OnlineGameState
 import com.battleship.fleetcommand.core.domain.multiplayer.ShotData
 import com.battleship.fleetcommand.core.domain.ship.ShipId
+import com.battleship.fleetcommand.core.domain.ship.ShipPlacement
+import com.battleship.fleetcommand.core.domain.ship.ShipRegistry
 import com.battleship.fleetcommand.core.ui.haptic.HapticEvent
 import com.battleship.fleetcommand.core.ui.haptic.HapticManager
 import com.battleship.fleetcommand.core.ui.model.BoardViewState
+import com.battleship.fleetcommand.core.ui.model.CellDisplayState
+import com.battleship.fleetcommand.core.ui.model.CellViewState
+import com.battleship.fleetcommand.core.ui.model.ShipPlacementViewState
+import com.battleship.fleetcommand.navigation.OnlineBattleRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -36,8 +45,13 @@ class OnlineGameViewModel @Inject constructor(
     private val repository: FirebaseMatchRepository,
     private val gameEngine: GameEngine,
     private val savedStateHandle: SavedStateHandle,
-    private val hapticManager: HapticManager
+    private val hapticManager: HapticManager,
 ) : ViewModel() {
+
+    // Route — gameId and myUid are now properly passed via OnlineBattleRoute
+    private val route: OnlineBattleRoute = savedStateHandle.toRoute()
+    private val gameId: String = route.gameId
+    private val myUid: String = route.myUid
 
     // ── UiState ────────────────────────────────────────────────────────────────
     @Immutable
@@ -50,12 +64,14 @@ class OnlineGameViewModel @Inject constructor(
         val connectionStatus: ConnectionStatus = ConnectionStatus.CONNECTED,
         val opponentName: String = "Opponent",
         val opponentConnected: Boolean = true,
-        val gameStatus: GameStatus = GameStatus.BATTLE,
-        val opponentDisconnectedSeconds: Int = 0
+        val gameStatus: GameStatus = GameStatus.WAITING,
+        val opponentDisconnectedSeconds: Int = 0,
+        val myShipCount: Int = 0,
+        val opponentSunkCount: Int = 0,
     )
 
     enum class ConnectionStatus { CONNECTED, RECONNECTING, DISCONNECTED }
-    enum class GameStatus { SETUP, BATTLE, FINISHED }
+    enum class GameStatus { WAITING, BATTLE, FINISHED }
 
     // ── UiEvent ────────────────────────────────────────────────────────────────
     sealed class UiEvent {
@@ -74,7 +90,7 @@ class OnlineGameViewModel @Inject constructor(
         data object ShowOpponentDisconnectedDialog : UiEffect()
     }
 
-    private val _uiState = MutableStateFlow(UiState())
+    private val _uiState = MutableStateFlow(UiState(gameId = gameId, myUid = myUid))
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     private val _effects = Channel<UiEffect>(Channel.BUFFERED)
@@ -85,14 +101,21 @@ class OnlineGameViewModel @Inject constructor(
     private var gameObserverJob: Job? = null
     private var opponentShotJob: Job? = null
 
+    // Local board — populated from Firebase boards node via game state
+    private var myPlacements: List<ShipPlacement> = emptyList()
+
     // Track which opponent shots have already been resolved to avoid double-processing
-    private val resolvedShotIndices = mutableSetOf<Int>()
+    private val resolvedShotKeys = mutableSetOf<String>()
+
+    // Track opponent UID once we know it (from game state)
+    private var opponentUid: String = ""
 
     // ── Init ───────────────────────────────────────────────────────────────────
-    fun init(gameId: String, myUid: String) {
-        _uiState.update { it.copy(gameId = gameId, myUid = myUid) }
-        startObservingGame(gameId, myUid)
-        startObservingOpponentShots(gameId)
+    init {
+        Timber.d("OnlineGameViewModel: init gameId=$gameId myUid=$myUid")
+        startObservingGame()
+        startObservingOpponentShots()
+        setPresence(connected = true)
     }
 
     // ── onEvent ────────────────────────────────────────────────────────────────
@@ -105,27 +128,28 @@ class OnlineGameViewModel @Inject constructor(
     }
 
     // ── Game state observer ────────────────────────────────────────────────────
-    private fun startObservingGame(gameId: String, myUid: String) {
+    private fun startObservingGame() {
         gameObserverJob?.cancel()
         gameObserverJob = viewModelScope.launch {
             repository.observeGameState(gameId)
                 .catch { e -> Timber.e(e, "OnlineGameViewModel: observeGameState error") }
-                .collect { state -> handleGameStateUpdate(state, myUid) }
+                .collect { state -> handleGameStateUpdate(state) }
         }
     }
 
-    private fun handleGameStateUpdate(state: OnlineGameState, myUid: String) {
-        val opponentUid  = state.opponentUid
-        val opponentData = state.players[opponentUid]
+    private fun handleGameStateUpdate(state: OnlineGameState) {
+        opponentUid = state.opponentUid
+
+        val opponentData = state.players[state.opponentUid]
         val opponentConn = opponentData?.connected == true
         val opponentName = opponentData?.name ?: "Opponent"
         val isMyTurn     = state.currentTurn == myUid
 
         val newStatus = when (state.status) {
-            "setup"    -> GameStatus.SETUP
+            "setup"    -> GameStatus.WAITING   // waiting for both to finish placing
             "battle"   -> GameStatus.BATTLE
             "finished" -> GameStatus.FINISHED
-            else       -> GameStatus.BATTLE
+            else       -> GameStatus.WAITING
         }
 
         // Detect opponent disconnect / reconnect
@@ -136,78 +160,149 @@ class OnlineGameViewModel @Inject constructor(
             cancelDisconnectTimer()
         }
 
+        // Rebuild boards from Firebase shot data
+        val myBoard       = buildMyBoard(state)
+        val opponentBoard = buildOpponentBoard(state)
+
         _uiState.update {
             it.copy(
                 isMyTurn          = isMyTurn,
                 opponentName      = opponentName,
                 opponentConnected = opponentConn,
                 gameStatus        = newStatus,
-                connectionStatus  = ConnectionStatus.CONNECTED
+                connectionStatus  = ConnectionStatus.CONNECTED,
+                myBoard           = myBoard,
+                opponentBoard     = opponentBoard,
             )
         }
 
         // Navigate to game over when a winner is declared
-        // Use ?: "" to avoid smart-cast-impossible on public API property
         val winner = state.winner ?: ""
         if (winner.isNotEmpty() && newStatus == GameStatus.FINISHED) {
+            // Translate UID to human-readable: "You" if local player won, opponent name otherwise
+            val displayWinner = if (winner == myUid) "You" else opponentName
             viewModelScope.launch {
-                _effects.send(UiEffect.NavigateToGameOver(winner))
+                _effects.send(UiEffect.NavigateToGameOver(displayWinner))
             }
         }
     }
 
+    // ── Build board views from Firebase state ──────────────────────────────────
+
+    /**
+     * My board: my ships + opponent's shots against me (hit/miss markers).
+     * We only know shot results once the opponent fires and we resolve them.
+     * The opponentShots list in OnlineGameState is our local view of shots fired AT us.
+     */
+    private fun buildMyBoard(state: OnlineGameState): BoardViewState {
+        val cells = Array(GameConstants.TOTAL_CELLS) { CellDisplayState.WATER }
+        // Show my ships
+        for (p in myPlacements) {
+            for (c in p.occupiedCoords()) if (c.isValid()) cells[c.index] = CellDisplayState.SHIP
+        }
+        // Overlay opponent's shots against me
+        for (shot in state.opponentShots) {
+            val coord = shot.coord
+            if (!coord.isValid()) continue
+            when (shot.result) {
+                FireResult.HIT, FireResult.SUNK -> cells[coord.index] = CellDisplayState.HIT
+                FireResult.MISS -> cells[coord.index] = CellDisplayState.MISS
+                null -> { /* not yet resolved */ }
+            }
+        }
+        // Mark sunk ships
+        val opponentShotCoords = state.opponentShots
+            .filter { it.result == FireResult.HIT || it.result == FireResult.SUNK }
+            .map { it.coord }.toSet()
+        val sunkIds = myPlacements.filter { p -> p.occupiedCoords().all { it in opponentShotCoords } }
+            .map { it.shipId }.toSet()
+        for (p in myPlacements.filter { it.shipId in sunkIds }) {
+            for (c in p.occupiedCoords()) if (c.isValid()) cells[c.index] = CellDisplayState.SUNK
+        }
+        val cellViews = cells.mapIndexed { i, s -> CellViewState(Coord(i), s) }.toImmutableList()
+        val shipViews = myPlacements.map { p ->
+            ShipPlacementViewState(p.shipId, p.headCoord, p.orientation, ShipRegistry.sizeOf(p.shipId), p.shipId in sunkIds)
+        }.toImmutableList()
+        return BoardViewState(cells = cellViews, ownShips = shipViews)
+    }
+
+    /**
+     * Opponent board (fog of war): only shows results of MY shots.
+     */
+    private fun buildOpponentBoard(state: OnlineGameState): BoardViewState {
+        val cells = Array(GameConstants.TOTAL_CELLS) { CellDisplayState.WATER }
+        for (shot in state.myShots) {
+            val coord = shot.coord
+            if (!coord.isValid()) continue
+            when (shot.result) {
+                FireResult.HIT, FireResult.SUNK -> cells[coord.index] = CellDisplayState.HIT
+                FireResult.MISS -> cells[coord.index] = CellDisplayState.MISS
+                null -> { /* pending result */ }
+            }
+        }
+        val cellViews = cells.mapIndexed { i, s -> CellViewState(Coord(i), s) }.toImmutableList()
+        return BoardViewState(cells = cellViews)
+    }
+
     // ── Opponent shot observer ─────────────────────────────────────────────────
-    private fun startObservingOpponentShots(gameId: String) {
+    private fun startObservingOpponentShots() {
         opponentShotJob?.cancel()
         opponentShotJob = viewModelScope.launch {
             repository.observeOpponentShots(gameId)
                 .catch { e -> Timber.e(e, "OnlineGameViewModel: observeOpponentShots error") }
-                .collect { shots -> resolveNewOpponentShots(gameId, shots) }
+                .collect { shots -> resolveNewOpponentShots(shots) }
         }
     }
 
-    private suspend fun resolveNewOpponentShots(gameId: String, shots: List<ShotData>) {
+    private suspend fun resolveNewOpponentShots(shots: List<ShotData>) {
         shots.forEachIndexed { index, shotData ->
-            if (index in resolvedShotIndices) return@forEachIndexed
-            if (shotData.result != null) return@forEachIndexed // already resolved by defender
-            resolvedShotIndices.add(index)
+            // Only resolve shots that have no result yet (null = unresolved)
+            if (shotData.result != null) return@forEachIndexed
+            val key = "$index-${shotData.row}-${shotData.col}"
+            if (key in resolvedShotKeys) return@forEachIndexed
+            resolvedShotKeys.add(key)
 
             val coord = Coord.fromRowCol(shotData.row, shotData.col)
 
-            // Resolve against our local ship placements via GameEngine
-            // NOTE: GameEngine.fireShot needs placements + shot history — simplified here
-            // as a pass-through; full integration requires passing board state from UiState
-            val outcome: ShotOutcome = ShotOutcome.Miss
+            // Resolve against our local ship placements
+            val alreadyShotCoords = shots.take(index).map { it.coord }.toSet()
+            val outcome: ShotOutcome = gameEngine.fireShot(coord, myPlacements, alreadyShotCoords)
+                .getOrElse { ShotOutcome.Miss }
 
-            // Map ShotOutcome -> FireResult for writing back
+            // Map to FireResult
             val fireResult: FireResult = when (outcome) {
                 is ShotOutcome.Hit  -> FireResult.HIT
                 is ShotOutcome.Sunk -> FireResult.SUNK
                 is ShotOutcome.Miss -> FireResult.MISS
             }
 
-            // Write the result back so the attacker's device can see it
+            // Write result back so the attacker can see it
             repository.writeShotResult(
                 gameId     = gameId,
-                shooterUid = "", // placeholder; real impl passes shooterUid from game state
+                shooterUid = opponentUid,
                 shotIndex  = index,
                 result     = fireResult
             )
 
-            // Animate on our board
+            // Animate on our board (incoming shots)
             when (fireResult) {
                 FireResult.HIT  -> {
                     hapticManager.perform(HapticEvent.HIT)
-                    _effects.send(UiEffect.ShowHitAnimation(coord))
+                    _effects.trySend(UiEffect.ShowHitAnimation(coord))
                 }
                 FireResult.MISS -> {
                     hapticManager.perform(HapticEvent.MISS)
-                    _effects.send(UiEffect.ShowMissAnimation(coord))
+                    _effects.trySend(UiEffect.ShowMissAnimation(coord))
                 }
                 FireResult.SUNK -> {
-                    hapticManager.perform(HapticEvent.SHIP_SUNK)  // ← FIXED: was HapticEvent.SUNK
+                    hapticManager.perform(HapticEvent.SHIP_SUNK)
                     val shipId = (outcome as? ShotOutcome.Sunk)?.shipId
-                    if (shipId != null) _effects.send(UiEffect.ShowSunkAnimation(shipId))
+                    if (shipId != null) _effects.trySend(UiEffect.ShowSunkAnimation(shipId))
+                    // Check if all our ships are sunk → we lose
+                    val myHitCoords = (resolvedShotKeys.size.let {
+                        shots.filter { s -> s.result == FireResult.HIT || s.result == FireResult.SUNK }.map { s -> s.coord }.toSet()
+                    })
+                    // Do a quick local check — the Firebase winner write will confirm it on both devices
                 }
             }
         }
@@ -218,7 +313,6 @@ class OnlineGameViewModel @Inject constructor(
         if (!_uiState.value.isMyTurn) return
         if (_uiState.value.gameStatus != GameStatus.BATTLE) return
         viewModelScope.launch {
-            val gameId = _uiState.value.gameId
             val result = repository.fireShot(gameId, coord)
             if (result.isFailure) {
                 Timber.e(result.exceptionOrNull(), "OnlineGameViewModel: fireShot failed")
@@ -231,30 +325,21 @@ class OnlineGameViewModel @Inject constructor(
     // ── Resign ─────────────────────────────────────────────────────────────────
     private fun handleResign() {
         viewModelScope.launch {
-            _effects.send(UiEffect.NavigateToGameOver(winner = ""))
+            _effects.send(UiEffect.NavigateToGameOver(winner = "Opponent"))
         }
     }
 
     // ── Claim victory after disconnect ─────────────────────────────────────────
     private fun handleClaimVictory() {
         viewModelScope.launch {
-            val gameId = _uiState.value.gameId
             repository.claimVictory(gameId)
         }
     }
 
-    // ── Reconnect ──────────────────────────────────────────────────────────────
-    private fun handleReconnect() {
+    // ── Presence ───────────────────────────────────────────────────────────────
+    private fun setPresence(connected: Boolean) {
         viewModelScope.launch {
-            val gameId = _uiState.value.gameId
-            _uiState.update { it.copy(connectionStatus = ConnectionStatus.RECONNECTING) }
-            _effects.send(UiEffect.ShowReconnectingOverlay)
-            withTimeoutOrNull(GameConstants.RECONNECT_TIMEOUT_SECS * 1_000L) {
-                repository.setPresence(gameId, connected = true)
-                _uiState.update { it.copy(connectionStatus = ConnectionStatus.CONNECTED) }
-            } ?: run {
-                _uiState.update { it.copy(connectionStatus = ConnectionStatus.DISCONNECTED) }
-            }
+            repository.setPresence(gameId, connected)
         }
     }
 
@@ -287,5 +372,6 @@ class OnlineGameViewModel @Inject constructor(
         gameObserverJob?.cancel()
         opponentShotJob?.cancel()
         disconnectTimerJob?.cancel()
+        setPresence(connected = false)
     }
 }

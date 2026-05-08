@@ -43,6 +43,7 @@ import com.battleship.fleetcommand.core.ui.model.CellDisplayState
 import com.battleship.fleetcommand.core.ui.theme.*
 import com.battleship.fleetcommand.navigation.BattleRoute
 import com.battleship.fleetcommand.navigation.HandOffRoute
+import com.battleship.fleetcommand.navigation.OnlineBattleRoute
 import kotlinx.coroutines.flow.collectLatest
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,6 +62,12 @@ fun ShipPlacementScreen(
                     navController.navigate(BattleRoute(gameId = effect.gameId)) {
                         popUpTo(com.battleship.fleetcommand.navigation.ModeSelectRoute) { inclusive = false }
                     }
+                is PlacementViewModel.UiEffect.NavigateToOnlineBattle ->
+                    // Online game — go to the dedicated online battle screen which uses
+                    // OnlineGameViewModel (Firebase-aware). No HandOff is needed.
+                    navController.navigate(OnlineBattleRoute(gameId = effect.gameId, myUid = effect.myUid)) {
+                        popUpTo(com.battleship.fleetcommand.navigation.ModeSelectRoute) { inclusive = false }
+                    }
                 is PlacementViewModel.UiEffect.NavigateToHandOff ->
                     navController.navigate(
                         HandOffRoute(
@@ -71,6 +78,7 @@ fun ShipPlacementScreen(
                         )
                     )
                 is PlacementViewModel.UiEffect.ShowPlacementError -> { /* future snackbar */ }
+                is PlacementViewModel.UiEffect.ShowError -> { /* future snackbar */ }
             }
         }
     }
@@ -111,7 +119,6 @@ fun ShipPlacementScreen(
                     viewModel.onEvent(PlacementViewModel.UiEvent.PlaceShip(selected, coord))
                 },
                 onDoubleTapCell = { coord ->
-                    // Double-tap a cell containing a ship to rotate it
                     val placement = uiState.placements.firstOrNull { p ->
                         coord in p.occupiedCoords()
                     }
@@ -134,6 +141,7 @@ fun ShipPlacementScreen(
             // ── Hint text ──────────────────────────────────────────────────
             Text(
                 text = when {
+                    uiState.isSubmitting -> "Submitting fleet to server…"
                     uiState.draggingShipId != null -> "Drop on the grid to place"
                     uiState.selectedShipId != null -> "Tap grid to place • Double-tap grid ship to rotate"
                     else -> "Tap a ship to select • Long-press & drag to place • Double-tap placed ship to rotate"
@@ -169,21 +177,26 @@ fun ShipPlacementScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedButton(
                     onClick = { viewModel.onEvent(PlacementViewModel.UiEvent.ClearAll) },
+                    enabled = !uiState.isSubmitting,
                     modifier = Modifier.weight(1f),
                 ) { Text("CLEAR") }
                 OutlinedButton(
                     onClick = { viewModel.onEvent(PlacementViewModel.UiEvent.AutoPlace) },
-                    enabled = !uiState.isAutoPlacing,
+                    enabled = !uiState.isAutoPlacing && !uiState.isSubmitting,
                     modifier = Modifier.weight(1f),
                 ) { Text("AUTO") }
             }
 
-            BattleshipButton(
-                text = "CONFIRM FLEET",
-                onClick = { viewModel.onEvent(PlacementViewModel.UiEvent.ConfirmPlacement) },
-                enabled = uiState.canConfirm,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            if (uiState.isSubmitting) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            } else {
+                BattleshipButton(
+                    text = "CONFIRM FLEET",
+                    onClick = { viewModel.onEvent(PlacementViewModel.UiEvent.ConfirmPlacement) },
+                    enabled = uiState.canConfirm,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 }
@@ -219,7 +232,10 @@ private fun PlacementGridWithDrag(
     }
 
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val cellSizeDp = (maxWidth - 24.dp) / GameConstants.BOARD_SIZE
+        // FIX: Grid renders 11 columns (1 label + 10 data cells).
+        // Divide by (BOARD_SIZE + 1) so all 11 columns fit within maxWidth - 24dp.
+        // Previously divided by BOARD_SIZE (10), causing cells to overflow the screen.
+        val cellSizeDp = (maxWidth - 24.dp) / (GameConstants.BOARD_SIZE + 1)
         cellSizePx = with(density) { cellSizeDp.toPx() }
 
         Box(
@@ -316,7 +332,6 @@ private fun ShipSelectionTray(
 ) {
     val density = LocalDensity.current
 
-    // Track each ship item's position so drag can compute grid coords
     val shipItemPositions = remember { mutableStateMapOf<ShipId, Offset>() }
     var gridTopLeft by remember { mutableStateOf(Offset.Zero) }
     var cellSizePx by remember { mutableStateOf(0f) }
@@ -371,7 +386,6 @@ private fun ShipSelectionTray(
                         .onGloballyPositioned { coords ->
                             shipItemPositions[shipDef.id] = coords.positionInRoot()
                         }
-                        // Long-press drag gesture from the tray item
                         .pointerInput(shipDef.id) {
                             detectDragGesturesAfterLongPress(
                                 onDragStart = { _ ->
@@ -379,16 +393,7 @@ private fun ShipSelectionTray(
                                 },
                                 onDrag = { change, _ ->
                                     change.consume()
-                                    // Convert absolute pointer position to grid coord
-                                    val absPos = change.position + (shipItemPositions[shipDef.id] ?: Offset.Zero)
-                                    // Use a broadcast approach: fire hover on every drag move
-                                    // The grid's onGloballyPositioned sets gridTopLeft & cellSizePx via
-                                    // the shared state — but we can't access that here directly.
-                                    // Instead we pass the absolute position and let the ViewModel
-                                    // do the math via DragGestureHandler.
-                                    // For simplicity: pass raw change.position relative to the item,
-                                    // and rely on the grid drop zone below.
-                                    onDragHover(shipDef.id, Coord(-1)) // sentinel — tray drag in progress
+                                    onDragHover(shipDef.id, Coord(-1)) // sentinel
                                 },
                                 onDragEnd = { onDragCancel() },
                                 onDragCancel = { onDragCancel() },
@@ -399,7 +404,6 @@ private fun ShipSelectionTray(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    // Ship name
                     Text(
                         text = shipDef.name,
                         style = MaterialTheme.typography.labelSmall,
@@ -407,7 +411,6 @@ private fun ShipSelectionTray(
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                     )
 
-                    // Visual ship cells preview
                     val isVertical = orientation is Orientation.Vertical
                     if (isVertical) {
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -445,7 +448,6 @@ private fun ShipSelectionTray(
                         }
                     }
 
-                    // Orientation indicator + rotate button — always visible for every ship
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(2.dp),
@@ -465,7 +467,6 @@ private fun ShipSelectionTray(
                         )
                     }
 
-                    // Status badge
                     if (isPlaced) {
                         Text(
                             text = "✓",
