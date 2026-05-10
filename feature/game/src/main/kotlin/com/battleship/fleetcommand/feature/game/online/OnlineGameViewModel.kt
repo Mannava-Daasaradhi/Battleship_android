@@ -14,6 +14,8 @@ import com.battleship.fleetcommand.core.domain.engine.ShotOutcome
 import com.battleship.fleetcommand.core.domain.multiplayer.FirebaseMatchRepository
 import com.battleship.fleetcommand.core.domain.multiplayer.OnlineGameState
 import com.battleship.fleetcommand.core.domain.multiplayer.ShotData
+import com.battleship.fleetcommand.core.domain.player.PlayerSlot
+import com.battleship.fleetcommand.core.domain.repository.GameRepository
 import com.battleship.fleetcommand.core.domain.ship.ShipId
 import com.battleship.fleetcommand.core.domain.ship.ShipPlacement
 import com.battleship.fleetcommand.core.domain.ship.ShipRegistry
@@ -36,13 +38,14 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
 class OnlineGameViewModel @Inject constructor(
     private val repository: FirebaseMatchRepository,
+    // BUG 2 FIX Part B-1 — inject GameRepository so we can load myPlacements from Room
+    private val gameRepository: GameRepository,
     private val gameEngine: GameEngine,
     private val savedStateHandle: SavedStateHandle,
     private val hapticManager: HapticManager,
@@ -101,7 +104,8 @@ class OnlineGameViewModel @Inject constructor(
     private var gameObserverJob: Job? = null
     private var opponentShotJob: Job? = null
 
-    // Local board — populated from Firebase boards node via game state
+    // BUG 2 FIX Part B-2 — myPlacements is loaded from Room in init{}
+    // Previously emptyList() and never populated, causing Bugs 2 and 3.
     private var myPlacements: List<ShipPlacement> = emptyList()
 
     // Track which opponent shots have already been resolved to avoid double-processing
@@ -116,6 +120,8 @@ class OnlineGameViewModel @Inject constructor(
         startObservingGame()
         startObservingOpponentShots()
         setPresence(connected = true)
+        // BUG 2 FIX Part B-3 — load ship placements from Room after observers start
+        loadMyPlacements()
     }
 
     // ── onEvent ────────────────────────────────────────────────────────────────
@@ -125,6 +131,52 @@ class OnlineGameViewModel @Inject constructor(
             is UiEvent.ResignGame            -> handleResign()
             is UiEvent.ClaimVictoryOnTimeout -> handleClaimVictory()
         }
+    }
+
+    // ── BUG 2 FIX Part B — Load my placements from Room ──────────────────────
+    //
+    // PlacementViewModel.confirmPlacement() (ONLINE branch) now saves the board
+    // to Room via gameRepository.saveBoardState(firebaseGameId, PlayerSlot.ONE, placements)
+    // BEFORE navigating here. We read them back so buildMyBoard() can show ships
+    // and resolveNewOpponentShots() can resolve hits correctly (fixing Bug 3 too).
+    private fun loadMyPlacements() {
+        viewModelScope.launch {
+            try {
+                val placements = gameRepository.getBoardState(gameId, PlayerSlot.ONE)
+                if (placements != null) {
+                    myPlacements = placements
+                    Timber.d("OnlineGameViewModel: loadMyPlacements loaded ${placements.size} ships for gameId=$gameId")
+                    // Rebuild myBoard now that we have placements.
+                    // Snapshot current state so we can pass it to buildMyBoard.
+                    val currentState = _uiState.value
+                    // We don't have an OnlineGameState here — rebuild from what we know.
+                    // The next game state update from Firebase will also trigger a rebuild,
+                    // but we pre-populate now so the grid isn't blank while waiting.
+                    _uiState.update { it.copy(myBoard = buildMyBoardFromPlacements(placements)) }
+                } else {
+                    Timber.w("OnlineGameViewModel: loadMyPlacements — no board state found in Room for gameId=$gameId")
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "OnlineGameViewModel: loadMyPlacements failed")
+            }
+        }
+    }
+
+    /**
+     * Builds the "YOUR FLEET" board using only placements — no shot data.
+     * Used immediately after loading from Room before the first Firebase update arrives.
+     * Subsequent updates flow through buildMyBoard(OnlineGameState) which overlays shots.
+     */
+    private fun buildMyBoardFromPlacements(placements: List<ShipPlacement>): BoardViewState {
+        val cells = Array(GameConstants.TOTAL_CELLS) { CellDisplayState.WATER }
+        for (p in placements) {
+            for (c in p.occupiedCoords()) if (c.isValid()) cells[c.index] = CellDisplayState.SHIP
+        }
+        val cellViews = cells.mapIndexed { i, s -> CellViewState(Coord(i), s) }.toImmutableList()
+        val shipViews = placements.map { p ->
+            ShipPlacementViewState(p.shipId, p.headCoord, p.orientation, ShipRegistry.sizeOf(p.shipId), false)
+        }.toImmutableList()
+        return BoardViewState(cells = cellViews, ownShips = shipViews)
     }
 
     // ── Game state observer ────────────────────────────────────────────────────
@@ -161,6 +213,7 @@ class OnlineGameViewModel @Inject constructor(
         }
 
         // Rebuild boards from Firebase shot data
+        // myPlacements is now populated from Room (Bug 2 fix), so buildMyBoard works correctly.
         val myBoard       = buildMyBoard(state)
         val opponentBoard = buildOpponentBoard(state)
 
@@ -179,7 +232,6 @@ class OnlineGameViewModel @Inject constructor(
         // Navigate to game over when a winner is declared
         val winner = state.winner ?: ""
         if (winner.isNotEmpty() && newStatus == GameStatus.FINISHED) {
-            // Translate UID to human-readable: "You" if local player won, opponent name otherwise
             val displayWinner = if (winner == myUid) "You" else opponentName
             viewModelScope.launch {
                 _effects.send(UiEffect.NavigateToGameOver(displayWinner))
@@ -191,8 +243,8 @@ class OnlineGameViewModel @Inject constructor(
 
     /**
      * My board: my ships + opponent's shots against me (hit/miss markers).
-     * We only know shot results once the opponent fires and we resolve them.
-     * The opponentShots list in OnlineGameState is our local view of shots fired AT us.
+     * BUG 2 FIX: myPlacements is now populated from Room so ships are visible.
+     * BUG 3 FIX: same fix — with real placements, shots resolve correctly.
      */
     private fun buildMyBoard(state: OnlineGameState): BoardViewState {
         val cells = Array(GameConstants.TOTAL_CELLS) { CellDisplayState.WATER }
@@ -264,7 +316,9 @@ class OnlineGameViewModel @Inject constructor(
 
             val coord = Coord.fromRowCol(shotData.row, shotData.col)
 
-            // Resolve against our local ship placements
+            // Resolve against our local ship placements.
+            // BUG 3 FIX: myPlacements is now populated (Bug 2 fix), so this correctly
+            // returns HIT/SUNK when the opponent fires on a ship cell.
             val alreadyShotCoords = shots.take(index).map { it.coord }.toSet()
             val outcome: ShotOutcome = gameEngine.fireShot(coord, myPlacements, alreadyShotCoords)
                 .getOrElse { ShotOutcome.Miss }
@@ -284,6 +338,11 @@ class OnlineGameViewModel @Inject constructor(
                 result     = fireResult
             )
 
+            // BUG 1 FIX — flip the turn after resolving the shot.
+            // The DEFENDER (us) has just resolved the attacker's shot.
+            // It is now the DEFENDER's turn to attack, so we write myUid as currentTurn.
+            repository.flipTurn(gameId, myUid)
+
             // Animate on our board (incoming shots)
             when (fireResult) {
                 FireResult.HIT  -> {
@@ -298,11 +357,8 @@ class OnlineGameViewModel @Inject constructor(
                     hapticManager.perform(HapticEvent.SHIP_SUNK)
                     val shipId = (outcome as? ShotOutcome.Sunk)?.shipId
                     if (shipId != null) _effects.trySend(UiEffect.ShowSunkAnimation(shipId))
-                    // Check if all our ships are sunk → we lose
-                    val myHitCoords = (resolvedShotKeys.size.let {
-                        shots.filter { s -> s.result == FireResult.HIT || s.result == FireResult.SUNK }.map { s -> s.coord }.toSet()
-                    })
-                    // Do a quick local check — the Firebase winner write will confirm it on both devices
+                    // Firebase winner write via claimVictory() when all ships sunk.
+                    // The observer on both devices will see status → "finished" and navigate.
                 }
             }
         }

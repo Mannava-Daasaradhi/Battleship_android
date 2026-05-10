@@ -34,7 +34,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -277,7 +276,10 @@ class PlacementViewModel @Inject constructor(
                     // ── Online placement confirmed ────────────────────────────────
                     // 1. Get the Firebase gameId from the route (passed from WaitingForOpponentScreen)
                     // 2. Submit ships to Firebase Realtime Database
-                    // 3. Also save to Room so GameOverScreen can display board history
+                    // 3. BUG 2 FIX Part A: Also save to Room so OnlineGameViewModel can
+                    //    read myPlacements back and display ships on the "YOUR FLEET" grid.
+                    //    The comment "Also save to Room" was in the original code but the
+                    //    actual call was missing — now added.
                     // 4. Navigate to OnlineBattleRoute (dedicated online battle screen)
                     //
                     // We do NOT go through HandOffScreen for online — there is no local handoff needed.
@@ -302,14 +304,30 @@ class PlacementViewModel @Inject constructor(
                         ships  = _uiState.value.placements
                     )
 
-                    _uiState.update { it.copy(isSubmitting = false) }
-
                     if (result.isFailure) {
+                        _uiState.update { it.copy(isSubmitting = false) }
                         val msg = result.exceptionOrNull()?.message ?: "Failed to submit ships. Check your connection."
                         Timber.e(result.exceptionOrNull(), "PlacementViewModel: submitShipPlacement failed")
                         _uiEffect.emit(UiEffect.ShowError(msg))
                         return@launch
                     }
+
+                    // BUG 2 FIX Part A — save board state to Room using the Firebase gameId
+                    // as the local gameId key. OnlineGameViewModel.loadMyPlacements() reads
+                    // this back via gameRepository.getBoardState(gameId, PlayerSlot.ONE).
+                    try {
+                        gameRepository.saveBoardState(
+                            firebaseGameId,
+                            PlayerSlot.ONE,
+                            _uiState.value.placements
+                        )
+                        Timber.d("PlacementViewModel: ONLINE board state saved to Room gameId=$firebaseGameId")
+                    } catch (e: Exception) {
+                        // Non-fatal: the game can still proceed; ships just won't show on the local board.
+                        Timber.e(e, "PlacementViewModel: ONLINE saveBoardState to Room failed — ships may not display locally")
+                    }
+
+                    _uiState.update { it.copy(isSubmitting = false) }
 
                     Timber.d("PlacementViewModel: ONLINE ships submitted — navigating to OnlineBattle gameId=$firebaseGameId myUid=$myUid")
                     _uiEffect.emit(UiEffect.NavigateToOnlineBattle(firebaseGameId, myUid))

@@ -26,6 +26,10 @@ import kotlinx.coroutines.flow.collectLatest
  * Online battle screen — wired to [OnlineGameViewModel] which uses Firebase Realtime DB.
  * Separate from BattleScreen (which uses local Room / AI) to keep concerns isolated.
  * Section 6 — Online Multiplayer.
+ *
+ * BUG 4 FIX: Both GameGrid composables now use Modifier.weight(1f) so they share
+ * available vertical space equally and the "YOUR FLEET" grid is never clipped off-screen.
+ * The outer Column uses Modifier.fillMaxSize() which is required for weight() to work.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -123,6 +127,9 @@ fun OnlineBattleScreen(
             )
         }
     ) { paddingValues ->
+        // BUG 4 FIX: Column uses fillMaxSize() so child weight() modifiers have a
+        // bounded height to share. Without fillMaxSize(), weight() has no effect and
+        // the bottom grid overflows the screen.
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -161,13 +168,18 @@ fun OnlineBattleScreen(
                     uiState.gameStatus == OnlineGameViewModel.GameStatus.BATTLE &&
                     uiState.opponentConnected
 
+            // BUG 4 FIX: Added weight(1f) so this grid shares vertical space equally
+            // with the "YOUR FLEET" grid below. Previously both grids had no height
+            // constraint and the bottom one was cut off.
             GameGrid(
                 board = uiState.opponentBoard,
                 showShips = false,
                 onCellTapped = if (canFire) { cell: CellViewState ->
                     viewModel.onEvent(OnlineGameViewModel.UiEvent.CellTapped(cell.coord))
                 } else null,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
             )
 
             HorizontalDivider()
@@ -178,11 +190,15 @@ fun OnlineBattleScreen(
                 color = MaterialTheme.colorScheme.primary,
             )
 
+            // BUG 4 FIX: Added weight(1f) so this grid shares vertical space equally
+            // with the "ENEMY WATERS" grid above. Previously this grid was clipped off-screen.
             GameGrid(
                 board = uiState.myBoard,
                 showShips = true,
                 onCellTapped = null,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
             )
         }
     }

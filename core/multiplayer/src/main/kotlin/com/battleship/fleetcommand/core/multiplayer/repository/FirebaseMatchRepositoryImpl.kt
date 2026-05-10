@@ -301,4 +301,21 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
             Timber.e(e, "FirebaseMatchRepositoryImpl: writeShotResult failed")
         }
     }
+
+    // ── flipTurn ──────────────────────────────────────────────────────────────
+    // BUG 1 FIX — writes nextPlayerUid to games/$gameId/meta/currentTurn.
+    // Called by the DEFENDER after resolving each incoming shot so the turn
+    // switches to the defender (who now becomes the attacker).
+    override suspend fun flipTurn(gameId: String, nextPlayerUid: String): Result<Unit> {
+        return try {
+            database.getReference("${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.META}/${FirebaseSchema.CURRENT_TURN}")
+                .setValue(nextPlayerUid)
+                .await()
+            Timber.d("FirebaseMatchRepositoryImpl: flipTurn gameId=$gameId nextTurn=$nextPlayerUid")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Timber.e(e, "FirebaseMatchRepositoryImpl: flipTurn failed")
+            Result.failure(e)
+        }
+    }
 }

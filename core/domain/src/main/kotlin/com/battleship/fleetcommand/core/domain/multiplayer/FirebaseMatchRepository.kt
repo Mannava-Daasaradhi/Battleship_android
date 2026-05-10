@@ -27,4 +27,17 @@ interface FirebaseMatchRepository {
         shotIndex: Int,
         result: FireResult
     )
+
+    /**
+     * BUG 1 FIX — Turn switching.
+     *
+     * Writes [nextPlayerUid] to games/[gameId]/meta/currentTurn so that both
+     * devices' [OnlineGameState] observers see the updated turn and the correct
+     * player's board becomes interactive.
+     *
+     * Called by the DEFENDER immediately after resolving an incoming shot via
+     * [writeShotResult]. The defender becomes the next attacker, so we pass
+     * myUid (the defender's UID) as [nextPlayerUid].
+     */
+    suspend fun flipTurn(gameId: String, nextPlayerUid: String): Result<Unit>
 }
