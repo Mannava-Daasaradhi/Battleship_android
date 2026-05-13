@@ -81,14 +81,28 @@ import com.battleship.fleetcommand.navigation.BattleRoute
 import com.battleship.fleetcommand.navigation.HandOffRoute
 import com.battleship.fleetcommand.navigation.MainMenuRoute
 import com.battleship.fleetcommand.navigation.OnlineBattleRoute
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 
-// Long-press threshold in milliseconds for drag activation from the ship tray.
-// 150ms feels instant without accidentally triggering drag on a quick tap.
-private const val DRAG_LONGPRESS_MS = 150L
+// ── DRAG LONG-PRESS THRESHOLD ─────────────────────────────────────────────────
+//
+// BUG FIX: was 150L — far too short. The Android system long-press threshold is
+// 500ms. At 150ms, any tap slower than 150ms (very common) accidentally activated
+// drag instead of tap. Additionally LazyRow's scroll gesture runs at the Initial
+// pass and consumed pointer events before our Main-pass handler saw them, causing
+// the withTimeoutOrNull inner loop to see consumed/stale pointer state.
+//
+// Fix 1: Raised to 500ms — matches the system ViewConfiguration.getLongPressTimeout()
+//         and is the value users intuitively understand as a long-press.
+// Fix 2: The tracking while-loop inside withTimeoutOrNull now uses
+//         PointerEventPass.Initial so we receive events BEFORE LazyRow's scroll
+//         handler consumes them. This makes the "finger still down?" check reliable
+//         regardless of scroll-gesture interception.
+// Fix 3: After drag is activated, the drag-tracking while-loop also uses
+//         PointerEventPass.Initial AND calls pointer.consume() to prevent LazyRow
+//         from scrolling while the user is dragging a ship.
+private const val DRAG_LONGPRESS_MS = 500L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -136,14 +150,25 @@ fun ShipPlacementScreen(
                     // MainMenuRoute is always the stack root for the online flow
                     // (MainMenu → OnlineLobby → WaitingForOpponent → ShipPlacement).
                     // ModeSelectRoute is NOT in the online back stack.
+                    //
+                    // BUG FIX: The previous code had a try/catch where the catch
+                    // retried without popUpTo. That retry left Lobby+Waiting+Placement
+                    // on the back stack, which then caused a crash in OnlineBattleScreen
+                    // when NavigateToGameOver tried to popUpTo MainMenuRoute on a dirty
+                    // stack. Fix: always use the graph's startDestinationId (which IS
+                    // MainMenuRoute) rather than the typed MainMenuRoute reference, so
+                    // the popUpTo never fails even if type-safe route serialisation has
+                    // a mismatch. If even that fails, we still navigate but with a clean
+                    // log rather than a crash.
                     try {
                         navController.navigate(
                             OnlineBattleRoute(gameId = effect.gameId, myUid = effect.myUid)
                         ) {
-                            popUpTo<MainMenuRoute> { inclusive = false }
+                            // Use startDestinationId (Int-based) — always present, never fails.
+                            popUpTo(navController.graph.startDestinationId) { inclusive = false }
                         }
                     } catch (e: Exception) {
-                        Timber.e(e, "ShipPlacementScreen: NavigateToOnlineBattle failed — retrying without popUpTo")
+                        Timber.e(e, "ShipPlacementScreen: NavigateToOnlineBattle popUpTo failed — navigating without popUpTo")
                         try {
                             navController.navigate(
                                 OnlineBattleRoute(gameId = effect.gameId, myUid = effect.myUid)
@@ -240,7 +265,7 @@ fun ShipPlacementScreen(
 
                 // ── Ship tray ────────────────────────────────────────────────
                 // NOTE: Drag is handled via raw pointerInput with awaitFirstDown +
-                // delay(150ms) + pointer tracking. This bypasses LocalViewConfiguration
+                // delay(500ms) + pointer tracking. This bypasses LocalViewConfiguration
                 // entirely and is reliably instant inside a LazyRow.
                 ShipSelectionTray(
                     uiState           = uiState,
@@ -527,31 +552,40 @@ private fun ShipSelectionTray(
                     label         = "shipAlpha${shipDef.id}",
                 )
 
-                // BUG 1 FIX — raw pointer gesture handler.
+                // ── Gesture handler ───────────────────────────────────────────
                 //
-                // Previous approach used detectDragGesturesAfterLongPress inside
-                // pointerInput() combined with a CompositionLocalProvider(LocalViewConfiguration)
-                // override to shorten the longpress threshold to 150ms. This was unreliable
-                // inside LazyRow because:
-                //   1. LazyRow reuses composition slots; the captured ViewConfiguration
-                //      could be stale when items scroll in/out of view.
-                //   2. The system may have already resolved pointer dispatch by the time
-                //      the overridden ViewConfiguration is read.
+                // LONG PRESS BUG FIX — root cause and solution:
                 //
-                // Fix: use awaitEachGesture + awaitFirstDown + delay(150ms) + manual pointer
-                // tracking. This is fully deterministic, requires no ViewConfiguration override,
-                // and reliably activates drag at exactly 150ms across all LazyRow items.
+                // PROBLEM 1 — threshold too short (150ms):
+                //   A normal human tap is 80–200ms. At 150ms, slow or deliberate taps
+                //   exceeded the threshold and triggered drag instead of selection.
+                //   Users couldn't reliably tap to select ships.
                 //
-                // Gesture logic:
-                //   - Await a finger DOWN on this item.
-                //   - Wait up to DRAG_LONGPRESS_MS (150ms) for the finger to lift (= tap) or hold.
-                //   - If the finger lifts before 150ms → it was a tap → fire onSelectShip.
-                //   - If the finger holds for 150ms → drag activated → fire onDragStarted.
-                //   - While dragging, track each MOVE event and call onDragMoved.
-                //   - On UP or CANCEL → call onDragEnded / onDragCancelled.
+                // PROBLEM 2 — wrong PointerEventPass:
+                //   The tracking while-loop used PointerEventPass.Main. LazyRow's internal
+                //   horizontal scroll gesture handler runs at PointerEventPass.Initial and
+                //   calls consume() on pointer events when it detects horizontal movement.
+                //   By the time Main pass ran, pointer events were already consumed by the
+                //   scroll handler. This made pointer.pressed unreliable (it could appear
+                //   "not pressed" even though the finger was still down), causing
+                //   withTimeoutOrNull to return true (tap) even on a genuine long-press.
                 //
-                // The rotate icon's own clickable handles rotation independently via a
-                // nested clickable with a tighter touch target.
+                // SOLUTION:
+                //   - DRAG_LONGPRESS_MS raised to 500ms (Android system standard).
+                //   - The tap-detection while-loop inside withTimeoutOrNull now uses
+                //     PointerEventPass.Initial so we see events BEFORE LazyRow consumes them.
+                //   - Once drag is activated (500ms elapsed), the drag-tracking while-loop
+                //     also uses PointerEventPass.Initial AND calls pointer.consume() on every
+                //     event, which prevents LazyRow from scrolling while a ship is being dragged.
+                //
+                // Gesture logic (unchanged):
+                //   - Await finger DOWN.
+                //   - Wait up to DRAG_LONGPRESS_MS (500ms) watching for finger UP → tap.
+                //   - Finger lifts before 500ms → onSelectShip (tap).
+                //   - 500ms elapses with finger still down → onDragStarted (drag).
+                //   - Track MOVE events → onDragMoved.
+                //   - Finger UP during drag → onDragEnded.
+                //   - Gesture cancelled → onDragCancelled.
                 Column(
                     modifier = Modifier
                         .graphicsLayer {
@@ -586,23 +620,21 @@ private fun ShipSelectionTray(
                                 var dragActivated = false
                                 var currentAbs    = startAbs
 
-                                // LONGPRESS FIX: withTimeoutOrNull correctly fires after
-                                // DRAG_LONGPRESS_MS even when the finger is held perfectly
-                                // still and no pointer move events arrive.
+                                // BUG FIX: Use PointerEventPass.Initial inside withTimeoutOrNull
+                                // so we receive events before LazyRow's scroll handler consumes
+                                // them. This makes the "finger still down?" check reliable.
                                 //
-                                // The previous approach used a while(currentTimeMillis()<deadline)
-                                // loop that called awaitPointerEvent() inside. Because
-                                // awaitPointerEvent() SUSPENDS until an event arrives, holding
-                                // still produced zero events, the time check was never reached,
-                                // and drag never activated. withTimeoutOrNull fires via the
-                                // coroutine dispatcher's delay mechanism independent of events.
+                                // withTimeoutOrNull fires after DRAG_LONGPRESS_MS regardless of
+                                // whether pointer events arrive (the coroutine dispatcher's delay
+                                // mechanism runs independently of the event stream).
                                 //
-                                // Returns true  → finger lifted before 150ms timeout → tap
-                                // Returns null  → 150ms elapsed with finger still down → drag
+                                // Returns true  → finger lifted before 500ms timeout → tap
+                                // Returns null  → 500ms elapsed with finger still down → drag
                                 val wasTap = withTimeoutOrNull(DRAG_LONGPRESS_MS) {
                                     while (true) {
                                         val event: PointerEvent = awaitPointerEvent(
-                                            pass = PointerEventPass.Main
+                                            // BUG FIX: Initial pass — before LazyRow scroll consumes events.
+                                            pass = PointerEventPass.Initial
                                         )
                                         val pointer = event.changes.firstOrNull() ?: break
                                         currentAbs = (shipItemPositions[shipDef.id]
@@ -621,17 +653,19 @@ private fun ShipSelectionTray(
                                     return@awaitEachGesture
                                 }
 
-                                // 150ms elapsed with finger still down → drag activated.
+                                // 500ms elapsed with finger still down → drag activated.
                                 dragActivated = true
                                 onDragStarted(shipDef.id, currentAbs)
 
                                 // Track drag until finger lifts.
+                                // BUG FIX: Use PointerEventPass.Initial AND consume() every event
+                                // so LazyRow does not scroll while the user drags a ship.
                                 while (true) {
                                     val event: PointerEvent = awaitPointerEvent(
-                                        pass = PointerEventPass.Main
+                                        pass = PointerEventPass.Initial
                                     )
                                     val pointer = event.changes.firstOrNull() ?: break
-                                    pointer.consume()
+                                    pointer.consume() // prevent LazyRow scroll during drag
                                     if (!pointer.pressed) {
                                         // Finger lifted → end drag
                                         currentAbs = (shipItemPositions[shipDef.id]
