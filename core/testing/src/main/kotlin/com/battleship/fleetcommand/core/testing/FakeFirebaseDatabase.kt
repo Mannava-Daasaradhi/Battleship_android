@@ -189,6 +189,20 @@ class FakeFirebaseDatabase : FirebaseMatchRepository {
         stateFlows[gameId]?.value = node
     }
 
+    /**
+     * BUG 1 FIX — Turn switching.
+     * Updates [currentTurn] to [nextPlayerUid] and emits on the state flow so that
+     * both [observeGameState] subscribers see the updated turn immediately.
+     * Mirrors [FirebaseMatchRepositoryImpl.flipTurn].
+     */
+    override suspend fun flipTurn(gameId: String, nextPlayerUid: String): Result<Unit> {
+        val node = games[gameId]
+            ?: return Result.failure(Exception("flipTurn: game not found: $gameId"))
+        node.currentTurn = nextPlayerUid
+        stateFlows[gameId]?.value = node
+        return Result.success(Unit)
+    }
+
     // ── Test helpers ──────────────────────────────────────────────────────────
 
     /** Injects a shot from the opponent into the game; triggers [observeOpponentShots]. */
