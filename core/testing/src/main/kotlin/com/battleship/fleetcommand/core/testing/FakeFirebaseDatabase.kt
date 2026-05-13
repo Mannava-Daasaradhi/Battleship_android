@@ -23,9 +23,9 @@ import java.util.UUID
  * Test helpers allow injecting opponent actions without touching Firebase.
  *
  * Mirrors real production behaviour:
- *  - joinGame advances status "waiting" → "setup" (both in lobby).
- *  - submitShipPlacement advances status "setup" → "battle" when both players ready.
- *  - joinGame is idempotent: if myUid == existing guestUid, re-join succeeds.
+ * - joinGame advances status "waiting" → "setup" (both in lobby).
+ * - submitShipPlacement advances status "setup" → "battle" when both players ready.
+ * - joinGame is idempotent: if myUid == existing guestUid, re-join succeeds.
  */
 class FakeFirebaseDatabase : FirebaseMatchRepository {
 
@@ -175,6 +175,19 @@ class FakeFirebaseDatabase : FirebaseMatchRepository {
         return Result.success(Unit)
     }
 
+    /**
+     * Implements forfeit: the forfeiting player concedes, so [opponentUid] is declared winner.
+     * Signature matches [FirebaseMatchRepository.forfeit] exactly:
+     *   forfeit(gameId: String, opponentUid: String)
+     */
+    override suspend fun forfeit(gameId: String, opponentUid: String): Result<Unit> {
+        val node = games[gameId] ?: return Result.failure(Exception("Game not found: $gameId"))
+        node.winner = opponentUid
+        node.status = "finished"
+        stateFlows[gameId]?.value = node
+        return Result.success(Unit)
+    }
+
     // Signature matches the real interface exactly:
     // writeShotResult(gameId, shooterUid, shotIndex: Int, result: FireResult)
     override suspend fun writeShotResult(
@@ -190,7 +203,6 @@ class FakeFirebaseDatabase : FirebaseMatchRepository {
     }
 
     /**
-     * BUG 1 FIX — Turn switching.
      * Updates [currentTurn] to [nextPlayerUid] and emits on the state flow so that
      * both [observeGameState] subscribers see the updated turn immediately.
      * Mirrors [FirebaseMatchRepositoryImpl.flipTurn].
