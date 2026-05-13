@@ -33,7 +33,9 @@ fun OnlineBattleScreen(
     route: com.battleship.fleetcommand.navigation.OnlineBattleRoute,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    
     var showResignDialog by remember { mutableStateOf(false) }
+    var showDisconnectDialog by remember { mutableStateOf(false) }
 
     BackHandler { showResignDialog = true }
 
@@ -44,7 +46,7 @@ fun OnlineBattleScreen(
                     try {
                         navController.navigate(
                             GameOverRoute(
-                                gameId = "", // Intentionally blank for online view suppression
+                                gameId = "",
                                 winner = effect.winner,
                                 totalShots = effect.totalShots,
                                 accuracy = effect.accuracy
@@ -56,11 +58,8 @@ fun OnlineBattleScreen(
                         Timber.e(e, "NavigateToGameOver failed")
                     }
                 }
-                is OnlineGameViewModel.UiEffect.ShowHitAnimation  -> { }
-                is OnlineGameViewModel.UiEffect.ShowMissAnimation -> { }
-                is OnlineGameViewModel.UiEffect.ShowSunkAnimation -> { }
-                is OnlineGameViewModel.UiEffect.ShowReconnectingOverlay -> { }
-                is OnlineGameViewModel.UiEffect.ShowOpponentDisconnectedDialog -> { }
+                is OnlineGameViewModel.UiEffect.ShowOpponentDisconnectedDialog -> { showDisconnectDialog = true }
+                else -> { /* Ignoring animation effects */ }
             }
         }
     }
@@ -78,6 +77,24 @@ fun OnlineBattleScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showResignDialog = false }) { Text("Cancel") }
+            },
+        )
+    }
+
+    // 📶 DISCONNECT DIALOG — Gives player the option to take the win if opponent abandons
+    if (showDisconnectDialog) {
+        AlertDialog(
+            onDismissRequest = { }, // Cannot dismiss without making a choice
+            title = { Text("Opponent Disconnected") },
+            text = { Text("Your opponent has been disconnected for over 30 seconds. Do you want to claim victory by default or keep waiting?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDisconnectDialog = false
+                    viewModel.onEvent(OnlineGameViewModel.UiEvent.ClaimVictoryOnTimeout)
+                }) { Text("Claim Victory", color = MaterialTheme.colorScheme.primary) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDisconnectDialog = false }) { Text("Keep Waiting") }
             },
         )
     }

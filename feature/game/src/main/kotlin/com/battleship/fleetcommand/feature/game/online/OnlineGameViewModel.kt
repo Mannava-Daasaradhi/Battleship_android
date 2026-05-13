@@ -103,6 +103,7 @@ class OnlineGameViewModel @Inject constructor(
     private var gameObserverJob: Job? = null
     private var opponentShotJob: Job? = null
     private var myPlacements: List<ShipPlacement> = emptyList()
+    
     private val resolvedShotKeys = mutableSetOf<String>()
     
     private var opponentUid: String = ""
@@ -230,9 +231,7 @@ class OnlineGameViewModel @Inject constructor(
             viewModelScope.launch {
                 try {
                     statsRepository.recordGameResult(matchResult)
-                } catch (e: Exception) {
-                    Timber.e(e, "Failed to save stats to local DB")
-                }
+                } catch (e: Exception) {}
                 _effects.send(UiEffect.NavigateToGameOver(displayWinner, totalShots, accuracy))
             }
         }
@@ -312,19 +311,9 @@ class OnlineGameViewModel @Inject constructor(
             repository.flipTurn(gameId, myUid)
 
             when (fireResult) {
-                FireResult.HIT  -> {
-                    hapticManager.perform(HapticEvent.HIT)
-                    _effects.trySend(UiEffect.ShowHitAnimation(coord))
-                }
-                FireResult.MISS -> {
-                    hapticManager.perform(HapticEvent.MISS)
-                    _effects.trySend(UiEffect.ShowMissAnimation(coord))
-                }
-                FireResult.SUNK -> {
-                    hapticManager.perform(HapticEvent.SHIP_SUNK)
-                    val shipId = (outcome as? ShotOutcome.Sunk)?.shipId
-                    if (shipId != null) _effects.trySend(UiEffect.ShowSunkAnimation(shipId))
-                }
+                FireResult.HIT  -> hapticManager.perform(HapticEvent.HIT)
+                FireResult.MISS -> hapticManager.perform(HapticEvent.MISS)
+                FireResult.SUNK -> hapticManager.perform(HapticEvent.SHIP_SUNK)
             }
         }
     }
@@ -347,9 +336,8 @@ class OnlineGameViewModel @Inject constructor(
 
     private fun handleResign() {
         if (navigatedToGameOver) return
-        _uiState.update { it.copy(isMyTurn = false) } // Lock UI
+        _uiState.update { it.copy(isMyTurn = false) }
         viewModelScope.launch {
-            // Write forfeit to Firebase. Both devices will receive the "finished" snapshot.
             repository.forfeit(gameId, opponentUid)
         }
     }
