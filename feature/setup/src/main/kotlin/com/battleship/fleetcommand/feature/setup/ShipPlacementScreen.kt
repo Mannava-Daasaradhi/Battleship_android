@@ -83,6 +83,7 @@ import com.battleship.fleetcommand.navigation.MainMenuRoute
 import com.battleship.fleetcommand.navigation.OnlineBattleRoute
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 
 // Long-press threshold in milliseconds for drag activation from the ship tray.
@@ -585,25 +586,39 @@ private fun ShipSelectionTray(
                                 var dragActivated = false
                                 var currentAbs    = startAbs
 
-                                // Poll pointer events for DRAG_LONGPRESS_MS.
-                                // If a UP/CANCEL arrives first → tap; otherwise → drag.
-                                val deadline = System.currentTimeMillis() + DRAG_LONGPRESS_MS
-                                while (System.currentTimeMillis() < deadline) {
-                                    val event: PointerEvent = awaitPointerEvent(
-                                        pass = PointerEventPass.Main
-                                    )
-                                    val pointer = event.changes.firstOrNull() ?: break
-                                    if (!pointer.pressed) {
-                                        // Finger lifted before longpress threshold → tap
-                                        pointer.consume()
-                                        onSelectShip(shipDef.id)
-                                        return@awaitEachGesture
+                                // LONGPRESS FIX: withTimeoutOrNull correctly fires after
+                                // DRAG_LONGPRESS_MS even when the finger is held perfectly
+                                // still and no pointer move events arrive.
+                                //
+                                // The previous approach used a while(currentTimeMillis()<deadline)
+                                // loop that called awaitPointerEvent() inside. Because
+                                // awaitPointerEvent() SUSPENDS until an event arrives, holding
+                                // still produced zero events, the time check was never reached,
+                                // and drag never activated. withTimeoutOrNull fires via the
+                                // coroutine dispatcher's delay mechanism independent of events.
+                                //
+                                // Returns true  → finger lifted before 150ms timeout → tap
+                                // Returns null  → 150ms elapsed with finger still down → drag
+                                val wasTap = withTimeoutOrNull(DRAG_LONGPRESS_MS) {
+                                    while (true) {
+                                        val event: PointerEvent = awaitPointerEvent(
+                                            pass = PointerEventPass.Main
+                                        )
+                                        val pointer = event.changes.firstOrNull() ?: break
+                                        currentAbs = (shipItemPositions[shipDef.id]
+                                            ?: Offset.Zero) + pointer.position
+                                        if (!pointer.pressed) {
+                                            // Finger lifted before threshold → tap
+                                            pointer.consume()
+                                            return@withTimeoutOrNull true
+                                        }
                                     }
-                                    currentAbs = (shipItemPositions[shipDef.id] ?: Offset.Zero) +
-                                            pointer.position
-                                    // Small intentional delay so we don't spin-burn CPU.
-                                    // awaitPointerEvent blocks until an event arrives, so
-                                    // this is only reached when there IS an event.
+                                    false
+                                }
+
+                                if (wasTap == true) {
+                                    onSelectShip(shipDef.id)
+                                    return@awaitEachGesture
                                 }
 
                                 // 150ms elapsed with finger still down → drag activated.
