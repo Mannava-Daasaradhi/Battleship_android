@@ -110,10 +110,10 @@ class OnlineGameViewModel @Inject constructor(
     // Track opponent UID once we know it (from game state)
     private var opponentUid: String = ""
 
-    // BUG 2 FIX — guard against duplicate NavigateToGameOver emissions.
-    // Firebase may fire the winner update multiple times (e.g. on reconnect) and
-    // each call to handleGameStateUpdate() would emit NavigateToGameOver again,
-    // causing the second navController.navigate() to crash on an inconsistent back stack.
+    // Guard against duplicate NavigateToGameOver emissions.
+    // Firebase may fire the winner update multiple times (on reconnect / resubscribe) and
+    // each call to handleGameStateUpdate() would emit NavigateToGameOver again, causing
+    // the second navController.navigate() to crash on an inconsistent back stack.
     // This flag is set on the first emission and blocks all subsequent ones.
     private var navigatedToGameOver = false
 
@@ -139,18 +139,34 @@ class OnlineGameViewModel @Inject constructor(
     //
     // PlacementViewModel.confirmPlacement() (ONLINE branch) saves the board to Room
     // via gameRepository.saveBoardState(firebaseGameId, PlayerSlot.ONE, placements)
-    // before navigating here. We read them back so buildMyBoard() can show ships
-    // and resolveNewOpponentShots() can resolve hits correctly.
+    // BEFORE emitting NavigateToOnlineBattle. However, Room writes are dispatched on
+    // the IO dispatcher and Jetpack Navigation composable instantiation happens very
+    // quickly — there is a small race window where this ViewModel's init() fires before
+    // the Room transaction is fully committed.
+    //
+    // Fix: retry up to LOAD_MAX_RETRIES times with LOAD_RETRY_DELAY_MS between each
+    // attempt. In practice the data is always available by retry 1 or 2.
     private fun loadMyPlacements() {
         viewModelScope.launch {
             try {
-                val placements = gameRepository.getBoardState(gameId, PlayerSlot.ONE)
-                if (placements != null) {
-                    myPlacements = placements
-                    Timber.d("OnlineGameViewModel: loadMyPlacements loaded ${placements.size} ships for gameId=$gameId")
-                    _uiState.update { it.copy(myBoard = buildMyBoardFromPlacements(placements)) }
+                var placements: List<ShipPlacement>? = null
+                repeat(LOAD_MAX_RETRIES) { attempt ->
+                    if (placements != null) return@repeat   // already found
+                    val loaded = gameRepository.getBoardState(gameId, PlayerSlot.ONE)
+                    if (!loaded.isNullOrEmpty()) {
+                        placements = loaded
+                    } else if (attempt < LOAD_MAX_RETRIES - 1) {
+                        Timber.w("OnlineGameViewModel: loadMyPlacements attempt ${attempt + 1} returned empty — retrying in ${LOAD_RETRY_DELAY_MS}ms")
+                        delay(LOAD_RETRY_DELAY_MS)
+                    }
+                }
+
+                if (!placements.isNullOrEmpty()) {
+                    myPlacements = placements!!
+                    Timber.d("OnlineGameViewModel: loadMyPlacements loaded ${placements!!.size} ships for gameId=$gameId")
+                    _uiState.update { it.copy(myBoard = buildMyBoardFromPlacements(placements!!)) }
                 } else {
-                    Timber.w("OnlineGameViewModel: loadMyPlacements — no board state found in Room for gameId=$gameId")
+                    Timber.e("OnlineGameViewModel: loadMyPlacements — no board state found after $LOAD_MAX_RETRIES retries for gameId=$gameId")
                 }
             } catch (e: Exception) {
                 Timber.e(e, "OnlineGameViewModel: loadMyPlacements failed")
@@ -217,11 +233,11 @@ class OnlineGameViewModel @Inject constructor(
             )
         }
 
-        // BUG 2 FIX — only emit NavigateToGameOver once per game.
-        // Firebase fires the winner update on every reconnect/resubscribe, so this
+        // Only emit NavigateToGameOver once per game.
+        // Firebase fires the winner update on every reconnect / resubscribe, so this
         // handler is called multiple times with status=="finished". Without the guard,
         // each call would push a new GameOverRoute onto the back stack and the second
-        // navController.navigate() crashes with IllegalStateException (inconsistent state).
+        // navController.navigate() crashes with IllegalStateException.
         val winner = state.winner ?: ""
         if (winner.isNotEmpty() && newStatus == GameStatus.FINISHED && !navigatedToGameOver) {
             navigatedToGameOver = true
@@ -350,8 +366,8 @@ class OnlineGameViewModel @Inject constructor(
 
     // ── Resign ─────────────────────────────────────────────────────────────────
     private fun handleResign() {
-        // BUG 2 FIX — also guard resign navigation so it cannot fire after the game-over
-        // observer has already navigated away (e.g., back-press races with Firebase update).
+        // Guard resign navigation so it cannot fire after the game-over observer has
+        // already navigated away (e.g., back-press races with Firebase update).
         if (navigatedToGameOver) return
         navigatedToGameOver = true
         viewModelScope.launch {
@@ -403,5 +419,15 @@ class OnlineGameViewModel @Inject constructor(
         opponentShotJob?.cancel()
         disconnectTimerJob?.cancel()
         setPresence(connected = false)
+    }
+
+    companion object {
+        // Retry configuration for loadMyPlacements().
+        // PlacementViewModel saves to Room on the IO dispatcher immediately before
+        // emitting NavigateToOnlineBattle. Navigation is fast enough that this
+        // ViewModel's init() may fire before Room commits. 5 retries × 300ms = 1.5s
+        // maximum wait — imperceptible to the player on the waiting screen.
+        private const val LOAD_MAX_RETRIES     = 5
+        private const val LOAD_RETRY_DELAY_MS  = 300L
     }
 }

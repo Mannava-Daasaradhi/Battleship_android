@@ -323,4 +323,3 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
             Result.failure(e)
         }
     }
-}

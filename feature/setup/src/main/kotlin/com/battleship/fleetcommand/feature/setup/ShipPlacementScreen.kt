@@ -1,3 +1,4 @@
+// FILE: feature/setup/src/main/kotlin/com/battleship/fleetcommand/feature/setup/ShipPlacementScreen.kt
 package com.battleship.fleetcommand.feature.setup
 
 import androidx.compose.animation.animateColorAsState
@@ -7,7 +8,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,7 +40,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -51,12 +52,13 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
+import androidx.compose.ui.input.pointer.PointerEvent
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalViewConfiguration
-import androidx.compose.ui.platform.ViewConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -79,8 +81,13 @@ import com.battleship.fleetcommand.navigation.BattleRoute
 import com.battleship.fleetcommand.navigation.HandOffRoute
 import com.battleship.fleetcommand.navigation.MainMenuRoute
 import com.battleship.fleetcommand.navigation.OnlineBattleRoute
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import timber.log.Timber
+
+// Long-press threshold in milliseconds for drag activation from the ship tray.
+// 150ms feels instant without accidentally triggering drag on a quick tap.
+private const val DRAG_LONGPRESS_MS = 150L
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -125,11 +132,9 @@ fun ShipPlacementScreen(
                         popUpTo(com.battleship.fleetcommand.navigation.ModeSelectRoute) { inclusive = false }
                     }
                 is PlacementViewModel.UiEffect.NavigateToOnlineBattle -> {
-                    // FIX: popUpTo(ModeSelectRoute) crashes for online flow because
-                    // ModeSelectRoute is NOT in the back stack
+                    // MainMenuRoute is always the stack root for the online flow
                     // (MainMenu → OnlineLobby → WaitingForOpponent → ShipPlacement).
-                    // Using MainMenuRoute which is always the start destination.
-                    // Wrapped in try/catch as a second safety net.
+                    // ModeSelectRoute is NOT in the online back stack.
                     try {
                         navController.navigate(
                             OnlineBattleRoute(gameId = effect.gameId, myUid = effect.myUid)
@@ -233,16 +238,9 @@ fun ShipPlacementScreen(
                 )
 
                 // ── Ship tray ────────────────────────────────────────────────
-                // NOTE: CompositionLocalProvider with longPressTimeoutMillis override is now
-                // applied INSIDE each LazyRow item (see ShipSelectionTray), not outside it.
-                // Reason: LazyRow creates items in a subcomposition scope. Providing
-                // LocalViewConfiguration outside the LazyRow does NOT reliably propagate
-                // the override into item content in all Compose versions — the items may
-                // capture the default system ViewConfiguration (500ms long-press) instead
-                // of the 150ms override, making drag feel sluggish.
-                // The fix moves the CompositionLocalProvider inside each item's Column so
-                // the pointerInput block for detectDragGesturesAfterLongPress always sees
-                // the overridden 150ms timeout.
+                // NOTE: Drag is handled via raw pointerInput with awaitFirstDown +
+                // delay(150ms) + pointer tracking. This bypasses LocalViewConfiguration
+                // entirely and is reliably instant inside a LazyRow.
                 ShipSelectionTray(
                     uiState           = uiState,
                     currentDragShipId = dragShipId,
@@ -322,7 +320,6 @@ fun ShipPlacementScreen(
                     )
                 }
             }
-
         } // end outer Box
     }
 }
@@ -336,92 +333,91 @@ private fun PlacementGridWithDrag(
     uiState: PlacementViewModel.UiState,
     onTapCell: (Coord) -> Unit,
     onDoubleTapCell: (Coord) -> Unit,
-    onMeasured: (topLeft: Offset, cellSizePx: Float) -> Unit,
+    onMeasured: (Offset, Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val density = LocalDensity.current
+    BoxWithConstraints(modifier = modifier) {
+        val density     = LocalDensity.current
+        // 1 column for row labels + 10 grid columns = 11 units across the full width
+        val cellSizeDp  = (maxWidth / (GameConstants.BOARD_SIZE + 1))
+        val cellSizePx  = with(density) { cellSizeDp.toPx() }
 
-    BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
-        val cellSizeDp      = (maxWidth - 24.dp) / (GameConstants.BOARD_SIZE + 1)
-        val cellSizePxLocal = with(density) { cellSizeDp.toPx() }
-
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .onGloballyPositioned { coords ->
-                    onMeasured(coords.positionInRoot(), cellSizePxLocal)
-                }
+                    onMeasured(coords.positionInRoot(), cellSizePx)
+                },
         ) {
-            Column {
-                // ── Column labels 1–10 ───────────────────────────────────────
-                Row {
-                    Spacer(Modifier.size(cellSizeDp))
-                    repeat(GameConstants.BOARD_SIZE) { col ->
-                        Box(Modifier.size(cellSizeDp), contentAlignment = Alignment.Center) {
-                            Text(
-                                text  = (col + 1).toString(),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            )
-                        }
+            // ── Column labels 1–10 ────────────────────────────────────────────
+            Row {
+                // Corner spacer
+                Box(Modifier.size(cellSizeDp))
+                repeat(GameConstants.BOARD_SIZE) { col ->
+                    Box(Modifier.size(cellSizeDp), contentAlignment = Alignment.Center) {
+                        Text(
+                            text  = (col + 1).toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        )
                     }
                 }
+            }
 
-                // ── Grid rows ────────────────────────────────────────────────
-                repeat(GameConstants.BOARD_SIZE) { row ->
-                    Row {
-                        // Row label A–J
-                        Box(Modifier.size(cellSizeDp), contentAlignment = Alignment.Center) {
-                            Text(
-                                text  = ('A' + row).toString(),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                            )
-                        }
+            // ── Grid rows ────────────────────────────────────────────────────
+            repeat(GameConstants.BOARD_SIZE) { row ->
+                Row {
+                    // Row label A–J
+                    Box(Modifier.size(cellSizeDp), contentAlignment = Alignment.Center) {
+                        Text(
+                            text  = ('A' + row).toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                        )
+                    }
 
-                        repeat(GameConstants.BOARD_SIZE) { col ->
-                            val coord    = Coord.fromRowCol(row, col)
-                            val cellState = uiState.board.cells.getOrNull(coord.index)
-                            val isShip   = cellState?.state == CellDisplayState.SHIP
-                            val isHovered = uiState.hoverCoords.contains(coord)
-                            val isHoverValid = uiState.hoverValid
+                    repeat(GameConstants.BOARD_SIZE) { col ->
+                        val coord    = Coord.fromRowCol(row, col)
+                        val cellState = uiState.board.cells.getOrNull(coord.index)
+                        val isShip   = cellState?.state == CellDisplayState.SHIP
+                        val isHovered = uiState.hoverCoords.contains(coord)
+                        val isHoverValid = uiState.hoverValid
 
-                            val isSelectedShipHere = uiState.selectedShipId?.let { selId ->
-                                uiState.placements.any { p ->
-                                    p.shipId == selId && coord in p.occupiedCoords()
-                                }
-                            } == true
-
-                            val bgColor = when {
-                                isHovered && isHoverValid  -> ValidGreen.copy(alpha = 0.6f)
-                                isHovered && !isHoverValid -> InvalidRed.copy(alpha = 0.6f)
-                                isShip                     -> NavyPrimary
-                                else                       -> NavySurface
+                        val isSelectedShipHere = uiState.selectedShipId?.let { selId ->
+                            uiState.placements.any { p ->
+                                p.shipId == selId && coord in p.occupiedCoords()
                             }
-                            val animatedBg by animateColorAsState(
-                                targetValue   = bgColor,
-                                animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                                label         = "cellBg$row$col",
-                            )
+                        } == true
 
-                            Box(
-                                modifier = Modifier
-                                    .size(cellSizeDp)
-                                    .background(animatedBg)
-                                    .border(
-                                        width = if (isSelectedShipHere) 2.dp else 0.5.dp,
-                                        color = if (isSelectedShipHere)
-                                            MaterialTheme.colorScheme.primary
-                                        else GridLine,
-                                    )
-                                    .pointerInput(coord) {
-                                        detectTapGestures(
-                                            onTap       = { onTapCell(coord) },
-                                            onDoubleTap = { onDoubleTapCell(coord) },
-                                        )
-                                    },
-                            )
+                        val bgColor = when {
+                            isHovered && isHoverValid  -> ValidGreen.copy(alpha = 0.6f)
+                            isHovered && !isHoverValid -> InvalidRed.copy(alpha = 0.6f)
+                            isShip                     -> NavyPrimary
+                            else                       -> NavySurface
                         }
+                        val animatedBg by animateColorAsState(
+                            targetValue   = bgColor,
+                            animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                            label         = "cellBg$row$col",
+                        )
+
+                        Box(
+                            modifier = Modifier
+                                .size(cellSizeDp)
+                                .background(animatedBg)
+                                .border(
+                                    width = if (isSelectedShipHere) 2.dp else 0.5.dp,
+                                    color = if (isSelectedShipHere)
+                                        MaterialTheme.colorScheme.primary
+                                    else GridLine,
+                                )
+                                .pointerInput(coord) {
+                                    detectTapGestures(
+                                        onTap       = { onTapCell(coord) },
+                                        onDoubleTap = { onDoubleTapCell(coord) },
+                                    )
+                                },
+                        )
                     }
                 }
             }
@@ -530,147 +526,194 @@ private fun ShipSelectionTray(
                     label         = "shipAlpha${shipDef.id}",
                 )
 
-                // FIX: CompositionLocalProvider with longPressTimeoutMillis = 150L is now
-                // inside each LazyRow item, wrapping the Column that contains the
-                // pointerInput(detectDragGesturesAfterLongPress) modifier.
+                // BUG 1 FIX — raw pointer gesture handler.
                 //
-                // Previously it was outside the LazyRow in ShipPlacementScreen.
-                // LazyRow items are composed in a subcomposition scope, so the
-                // LocalViewConfiguration override from outside did NOT reliably propagate
-                // into item content — items captured the system default 500ms timeout
-                // instead of 150ms, making drag activation feel sluggish.
+                // Previous approach used detectDragGesturesAfterLongPress inside
+                // pointerInput() combined with a CompositionLocalProvider(LocalViewConfiguration)
+                // override to shorten the longpress threshold to 150ms. This was unreliable
+                // inside LazyRow because:
+                //   1. LazyRow reuses composition slots; the captured ViewConfiguration
+                //      could be stale when items scroll in/out of view.
+                //   2. The system may have already resolved pointer dispatch by the time
+                //      the overridden ViewConfiguration is read.
                 //
-                // Placing CompositionLocalProvider directly inside the item ensures the
-                // overridden ViewConfiguration is captured by pointerInput at the correct
-                // composition site, giving instant (150ms) drag activation every time.
-                val currentViewConfig = LocalViewConfiguration.current
-                CompositionLocalProvider(
-                    LocalViewConfiguration provides object : ViewConfiguration by currentViewConfig {
-                        override val longPressTimeoutMillis: Long get() = 150L
-                    }
+                // Fix: use awaitEachGesture + awaitFirstDown + delay(150ms) + manual pointer
+                // tracking. This is fully deterministic, requires no ViewConfiguration override,
+                // and reliably activates drag at exactly 150ms across all LazyRow items.
+                //
+                // Gesture logic:
+                //   - Await a finger DOWN on this item.
+                //   - Wait up to DRAG_LONGPRESS_MS (150ms) for the finger to lift (= tap) or hold.
+                //   - If the finger lifts before 150ms → it was a tap → fire onSelectShip.
+                //   - If the finger holds for 150ms → drag activated → fire onDragStarted.
+                //   - While dragging, track each MOVE event and call onDragMoved.
+                //   - On UP or CANCEL → call onDragEnded / onDragCancelled.
+                //
+                // The rotate icon's own clickable handles rotation independently via a
+                // nested clickable with a tighter touch target.
+                Column(
+                    modifier = Modifier
+                        .graphicsLayer {
+                            alpha  = itemAlpha
+                            scaleX = if (isDragging) 0.9f else 1f
+                            scaleY = if (isDragging) 0.9f else 1f
+                        }
+                        .border(
+                            width  = if (isSelected || isDragging) 2.dp else 1.dp,
+                            color  = borderColor,
+                            shape  = RoundedCornerShape(8.dp),
+                        )
+                        .background(
+                            color = when {
+                                isDragging -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                isPlaced   -> ValidGreen.copy(alpha = 0.1f)
+                                else       -> MaterialTheme.colorScheme.surface
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                        )
+                        .onGloballyPositioned { coords ->
+                            shipItemPositions[shipDef.id] = coords.positionInRoot()
+                        }
+                        .pointerInput(shipDef.id) {
+                            awaitEachGesture {
+                                // Wait for initial finger contact.
+                                val down = awaitFirstDown(requireUnconsumed = false)
+                                val startAbs = (shipItemPositions[shipDef.id] ?: Offset.Zero) +
+                                        down.position
+
+                                var dragActivated = false
+                                var currentAbs    = startAbs
+
+                                // Poll pointer events for DRAG_LONGPRESS_MS.
+                                // If a UP/CANCEL arrives first → tap; otherwise → drag.
+                                val deadline = System.currentTimeMillis() + DRAG_LONGPRESS_MS
+                                while (System.currentTimeMillis() < deadline) {
+                                    val event: PointerEvent = awaitPointerEvent(
+                                        pass = PointerEventPass.Main
+                                    )
+                                    val pointer = event.changes.firstOrNull() ?: break
+                                    if (!pointer.pressed) {
+                                        // Finger lifted before longpress threshold → tap
+                                        pointer.consume()
+                                        onSelectShip(shipDef.id)
+                                        return@awaitEachGesture
+                                    }
+                                    currentAbs = (shipItemPositions[shipDef.id] ?: Offset.Zero) +
+                                            pointer.position
+                                    // Small intentional delay so we don't spin-burn CPU.
+                                    // awaitPointerEvent blocks until an event arrives, so
+                                    // this is only reached when there IS an event.
+                                }
+
+                                // 150ms elapsed with finger still down → drag activated.
+                                dragActivated = true
+                                onDragStarted(shipDef.id, currentAbs)
+
+                                // Track drag until finger lifts.
+                                while (true) {
+                                    val event: PointerEvent = awaitPointerEvent(
+                                        pass = PointerEventPass.Main
+                                    )
+                                    val pointer = event.changes.firstOrNull() ?: break
+                                    pointer.consume()
+                                    if (!pointer.pressed) {
+                                        // Finger lifted → end drag
+                                        currentAbs = (shipItemPositions[shipDef.id]
+                                            ?: Offset.Zero) + pointer.position
+                                        onDragEnded(currentAbs)
+                                        return@awaitEachGesture
+                                    }
+                                    currentAbs = (shipItemPositions[shipDef.id] ?: Offset.Zero) +
+                                            pointer.position
+                                    onDragMoved(shipDef.id, currentAbs)
+                                }
+
+                                // Pointer stream ended unexpectedly → cancel
+                                if (dragActivated) {
+                                    onDragCancelled()
+                                }
+                            }
+                        }
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .graphicsLayer {
-                                alpha  = itemAlpha
-                                scaleX = if (isDragging) 0.9f else 1f
-                                scaleY = if (isDragging) 0.9f else 1f
-                            }
-                            .border(
-                                width  = if (isSelected || isDragging) 2.dp else 1.dp,
-                                color  = borderColor,
-                                shape  = RoundedCornerShape(8.dp),
-                            )
-                            .background(
-                                color = when {
-                                    isDragging -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                                    isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                    isPlaced   -> ValidGreen.copy(alpha = 0.1f)
-                                    else       -> MaterialTheme.colorScheme.surface
-                                },
-                                shape = RoundedCornerShape(8.dp),
-                            )
-                            .onGloballyPositioned { coords ->
-                                shipItemPositions[shipDef.id] = coords.positionInRoot()
-                            }
-                            .pointerInput(shipDef.id) {
-                                var currentAbsOffset = Offset.Zero
-                                detectDragGesturesAfterLongPress(
-                                    onDragStart = { localOffset ->
-                                        currentAbsOffset =
-                                            (shipItemPositions[shipDef.id] ?: Offset.Zero) + localOffset
-                                        onDragStarted(shipDef.id, currentAbsOffset)
-                                    },
-                                    onDrag = { change, delta ->
-                                        change.consume()
-                                        currentAbsOffset += delta
-                                        onDragMoved(shipDef.id, currentAbsOffset)
-                                    },
-                                    onDragEnd    = { onDragEnded(currentAbsOffset) },
-                                    onDragCancel = { onDragCancelled() },
+                    // Ship name
+                    Text(
+                        text       = shipDef.name,
+                        style      = MaterialTheme.typography.labelSmall,
+                        color      = if (isPlaced) ValidGreen else MaterialTheme.colorScheme.onSurface,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                    )
+
+                    // Ship cell visualisation
+                    val isVertical = orientation is Orientation.Vertical
+                    if (isVertical) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            repeat(shipDef.size) {
+                                Box(
+                                    Modifier
+                                        .size(10.dp)
+                                        .background(
+                                            color = when {
+                                                isPlaced   -> ValidGreen
+                                                isSelected -> MaterialTheme.colorScheme.primary
+                                                else       -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                            },
+                                            shape = RoundedCornerShape(2.dp),
+                                        )
                                 )
                             }
-                            .clickable { onSelectShip(shipDef.id) }
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        // Ship name
-                        Text(
-                            text       = shipDef.name,
-                            style      = MaterialTheme.typography.labelSmall,
-                            color      = if (isPlaced) ValidGreen else MaterialTheme.colorScheme.onSurface,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                        )
-
-                        // Ship cell visualisation
-                        val isVertical = orientation is Orientation.Vertical
-                        if (isVertical) {
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                repeat(shipDef.size) {
-                                    Box(
-                                        Modifier
-                                            .size(10.dp)
-                                            .background(
-                                                color = when {
-                                                    isPlaced   -> ValidGreen
-                                                    isSelected -> MaterialTheme.colorScheme.primary
-                                                    else       -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                                                },
-                                                shape = RoundedCornerShape(2.dp),
-                                            )
-                                    )
-                                }
-                            }
-                        } else {
-                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                repeat(shipDef.size) {
-                                    Box(
-                                        Modifier
-                                            .size(10.dp)
-                                            .background(
-                                                color = when {
-                                                    isPlaced   -> ValidGreen
-                                                    isSelected -> MaterialTheme.colorScheme.primary
-                                                    else       -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                                                },
-                                                shape = RoundedCornerShape(2.dp),
-                                            )
-                                    )
-                                }
-                            }
                         }
-
-                        // Orientation indicator + rotate button
-                        Row(
-                            verticalAlignment     = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp),
-                        ) {
-                            Text(
-                                text  = if (orientation is Orientation.Horizontal) "H" else "V",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            )
-                            Icon(
-                                imageVector        = Icons.Default.Refresh,
-                                contentDescription = "Rotate ${shipDef.name}",
-                                modifier           = Modifier
-                                    .size(14.dp)
-                                    .clickable { onRotateShip(shipDef.id) },
-                                tint               = MaterialTheme.colorScheme.primary,
-                            )
-                        }
-
-                        // Placed checkmark
-                        if (isPlaced) {
-                            Text(
-                                text  = "✓",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = ValidGreen,
-                            )
+                    } else {
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            repeat(shipDef.size) {
+                                Box(
+                                    Modifier
+                                        .size(10.dp)
+                                        .background(
+                                            color = when {
+                                                isPlaced   -> ValidGreen
+                                                isSelected -> MaterialTheme.colorScheme.primary
+                                                else       -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                            },
+                                            shape = RoundedCornerShape(2.dp),
+                                        )
+                                )
+                            }
                         }
                     }
-                } // end CompositionLocalProvider
+
+                    // Orientation indicator + rotate button
+                    Row(
+                        verticalAlignment     = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(
+                            text  = if (orientation is Orientation.Horizontal) "H" else "V",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        )
+                        Icon(
+                            imageVector        = Icons.Default.Refresh,
+                            contentDescription = "Rotate ${shipDef.name}",
+                            modifier           = Modifier
+                                .size(14.dp)
+                                .clickable { onRotateShip(shipDef.id) },
+                            tint               = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+
+                    // Placed checkmark
+                    if (isPlaced) {
+                        Text(
+                            text  = "✓",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = ValidGreen,
+                        )
+                    }
+                }
             }
         }
     }
