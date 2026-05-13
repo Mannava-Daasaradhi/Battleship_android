@@ -1,3 +1,4 @@
+// FILE: feature/setup/src/main/kotlin/com/battleship/fleetcommand/feature/setup/PlacementViewModel.kt
 package com.battleship.fleetcommand.feature.setup
 
 import androidx.compose.runtime.Immutable
@@ -293,6 +294,39 @@ class PlacementViewModel @Inject constructor(
                         return@launch
                     }
 
+                    // ── BUG 1 FIX ────────────────────────────────────────────────────
+                    // BoardStateEntity has a foreign key on gameId → games.id.
+                    // For online games the Firebase game ID is never inserted into the
+                    // local Room `games` table, so saveBoardState() below throws a
+                    // SQLiteConstraintException (FK violation) which is caught silently
+                    // and the board write is discarded.  OnlineGameViewModel.loadMyPlacements()
+                    // then reads null from Room → myPlacements stays empty → ships invisible,
+                    // hits never register, turn never flips.
+                    //
+                    // Fix: insert (or no-op if already present) a minimal Game row keyed on
+                    // firebaseGameId BEFORE calling saveBoardState().  createGame() uses
+                    // OnConflictStrategy.REPLACE so calling it twice is safe (e.g. back-press
+                    // + retry scenario).
+                    try {
+                        gameRepository.createGame(
+                            com.battleship.fleetcommand.core.domain.model.Game(
+                                id          = firebaseGameId,
+                                mode        = GameMode.ONLINE,
+                                player1Name = "Player",
+                                player2Name = "Opponent",
+                                startedAt   = System.currentTimeMillis(),
+                            )
+                        )
+                        Timber.d("PlacementViewModel: ONLINE — created local Game row for gameId=$firebaseGameId")
+                    } catch (e: Exception) {
+                        // If the row already exists (REPLACE ignores this) or another
+                        // non-fatal error, log and continue.  The subsequent saveBoardState
+                        // will succeed if the row was inserted; if it still fails it is
+                        // caught below with the existing try/catch.
+                        Timber.w(e, "PlacementViewModel: ONLINE — createGame for local row failed gameId=$firebaseGameId (non-fatal)")
+                    }
+                    // ── END BUG 1 FIX ────────────────────────────────────────────────
+
                     val result = firebaseMatchRepository.submitShipPlacement(
                         gameId = firebaseGameId,
                         ships  = _uiState.value.placements,
@@ -315,7 +349,12 @@ class PlacementViewModel @Inject constructor(
                         )
                         Timber.d("PlacementViewModel: ONLINE board state saved to Room gameId=$firebaseGameId")
                     } catch (e: Exception) {
+                        // This should no longer throw now that the parent Game row exists,
+                        // but keep the catch as a safety net.
                         Timber.e(e, "PlacementViewModel: ONLINE saveBoardState to Room failed — ships may not display locally")
+                        // Do NOT return early — the Firebase write succeeded so the game
+                        // can still proceed. The board display will be degraded but the
+                        // game is not unrecoverable.
                     }
 
                     _uiState.update { it.copy(isSubmitting = false) }

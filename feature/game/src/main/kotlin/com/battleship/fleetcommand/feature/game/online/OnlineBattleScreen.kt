@@ -4,6 +4,8 @@ package com.battleship.fleetcommand.feature.game.online
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
@@ -21,15 +23,21 @@ import com.battleship.fleetcommand.core.ui.theme.NavySurface
 import com.battleship.fleetcommand.navigation.GameOverRoute
 import com.battleship.fleetcommand.navigation.OnlineBattleRoute
 import kotlinx.coroutines.flow.collectLatest
+import timber.log.Timber
 
 /**
  * Online battle screen — wired to [OnlineGameViewModel] which uses Firebase Realtime DB.
  * Separate from BattleScreen (which uses local Room / AI) to keep concerns isolated.
  * Section 6 — Online Multiplayer.
  *
- * BUG 4 FIX: Both GameGrid composables now use Modifier.weight(1f) so they share
- * available vertical space equally and the "YOUR FLEET" grid is never clipped off-screen.
- * The outer Column uses Modifier.fillMaxSize() which is required for weight() to work.
+ * BUG 2 FIX: Navigation to GameOverRoute is wrapped in try/catch so a crash in
+ * navController.navigate() (e.g. back-stack already popped) never kills the process.
+ *
+ * BUG 4 FIX: The inner Column is wrapped in verticalScroll() and GameGrid calls use
+ * no weight(1f) modifier — GameGrid now uses a plain Column+Row layout that reports
+ * full intrinsic height, so both grids are always fully visible and scrollable on
+ * any screen size. The outer Column still uses fillMaxSize() so the gradient fills
+ * the screen, and verticalScroll() provides overflow access on small screens.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,10 +57,19 @@ fun OnlineBattleScreen(
     LaunchedEffect(Unit) {
         viewModel.effects.collectLatest { effect ->
             when (effect) {
-                is OnlineGameViewModel.UiEffect.NavigateToGameOver ->
-                    navController.navigate(GameOverRoute(gameId = "", winner = effect.winner)) {
-                        popUpTo(com.battleship.fleetcommand.navigation.MainMenuRoute) { inclusive = false }
+                is OnlineGameViewModel.UiEffect.NavigateToGameOver -> {
+                    // BUG 2 FIX: wrap in try/catch — a navigation crash (e.g. Activity
+                    // destroyed, back stack inconsistent) must never kill the process.
+                    // OnlineGameViewModel already guards against duplicate emissions via
+                    // navigatedToGameOver, but the try/catch is a second safety net.
+                    try {
+                        navController.navigate(GameOverRoute(gameId = "", winner = effect.winner)) {
+                            popUpTo(com.battleship.fleetcommand.navigation.MainMenuRoute) { inclusive = false }
+                        }
+                    } catch (e: Exception) {
+                        Timber.e(e, "OnlineBattleScreen: NavigateToGameOver failed — winner=${effect.winner}")
                     }
+                }
                 is OnlineGameViewModel.UiEffect.ShowHitAnimation  -> { /* future animation */ }
                 is OnlineGameViewModel.UiEffect.ShowMissAnimation -> { /* future animation */ }
                 is OnlineGameViewModel.UiEffect.ShowSunkAnimation -> { /* future animation */ }
@@ -127,15 +144,18 @@ fun OnlineBattleScreen(
             )
         }
     ) { paddingValues ->
-        // BUG 4 FIX: Column uses fillMaxSize() so child weight() modifiers have a
-        // bounded height to share. Without fillMaxSize(), weight() has no effect and
-        // the bottom grid overflows the screen.
+        // BUG 4 FIX: verticalScroll() ensures both grids are reachable on any screen size.
+        // GameGrid no longer uses LazyVerticalGrid (see GameGrid.kt fix), so it reports
+        // its full intrinsic height correctly. weight(1f) is removed — it was fighting
+        // intrinsic height measurement and is not needed with the non-lazy grid.
+        // fillMaxSize() is kept so the gradient background fills the full screen.
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Brush.verticalGradient(listOf(NavySurface, NavyBackground)))
                 .padding(paddingValues)
-                .padding(horizontal = 8.dp),
+                .padding(horizontal = 8.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Status info row
@@ -168,18 +188,16 @@ fun OnlineBattleScreen(
                     uiState.gameStatus == OnlineGameViewModel.GameStatus.BATTLE &&
                     uiState.opponentConnected
 
-            // BUG 4 FIX: Added weight(1f) so this grid shares vertical space equally
-            // with the "YOUR FLEET" grid below. Previously both grids had no height
-            // constraint and the bottom one was cut off.
+            // BUG 4 FIX: weight(1f) removed — GameGrid now uses Column+Row internally
+            // and reports full intrinsic height. verticalScroll on the parent Column
+            // handles overflow so both grids are always fully reachable.
             GameGrid(
                 board = uiState.opponentBoard,
                 showShips = false,
                 onCellTapped = if (canFire) { cell: CellViewState ->
                     viewModel.onEvent(OnlineGameViewModel.UiEvent.CellTapped(cell.coord))
                 } else null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
+                modifier = Modifier.fillMaxWidth(),
             )
 
             HorizontalDivider()
@@ -190,16 +208,16 @@ fun OnlineBattleScreen(
                 color = MaterialTheme.colorScheme.primary,
             )
 
-            // BUG 4 FIX: Added weight(1f) so this grid shares vertical space equally
-            // with the "ENEMY WATERS" grid above. Previously this grid was clipped off-screen.
+            // BUG 4 FIX: weight(1f) removed — same reason as above.
             GameGrid(
                 board = uiState.myBoard,
                 showShips = true,
                 onCellTapped = null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
+                modifier = Modifier.fillMaxWidth(),
             )
+
+            // Bottom spacer so the last grid has breathing room when scrolled to end
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }

@@ -77,8 +77,10 @@ import com.battleship.fleetcommand.core.ui.theme.NavySurface
 import com.battleship.fleetcommand.core.ui.theme.ValidGreen
 import com.battleship.fleetcommand.navigation.BattleRoute
 import com.battleship.fleetcommand.navigation.HandOffRoute
+import com.battleship.fleetcommand.navigation.MainMenuRoute
 import com.battleship.fleetcommand.navigation.OnlineBattleRoute
 import kotlinx.coroutines.flow.collectLatest
+import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -122,12 +124,29 @@ fun ShipPlacementScreen(
                     navController.navigate(BattleRoute(gameId = effect.gameId)) {
                         popUpTo(com.battleship.fleetcommand.navigation.ModeSelectRoute) { inclusive = false }
                     }
-                is PlacementViewModel.UiEffect.NavigateToOnlineBattle ->
-                    navController.navigate(
-                        OnlineBattleRoute(gameId = effect.gameId, myUid = effect.myUid)
-                    ) {
-                        popUpTo(com.battleship.fleetcommand.navigation.ModeSelectRoute) { inclusive = false }
+                is PlacementViewModel.UiEffect.NavigateToOnlineBattle -> {
+                    // FIX: popUpTo(ModeSelectRoute) crashes for online flow because
+                    // ModeSelectRoute is NOT in the back stack
+                    // (MainMenu → OnlineLobby → WaitingForOpponent → ShipPlacement).
+                    // Using MainMenuRoute which is always the start destination.
+                    // Wrapped in try/catch as a second safety net.
+                    try {
+                        navController.navigate(
+                            OnlineBattleRoute(gameId = effect.gameId, myUid = effect.myUid)
+                        ) {
+                            popUpTo(MainMenuRoute) { inclusive = false }
+                        }
+                    } catch (e: Exception) {
+                        Timber.e(e, "ShipPlacementScreen: NavigateToOnlineBattle failed — retrying without popUpTo")
+                        try {
+                            navController.navigate(
+                                OnlineBattleRoute(gameId = effect.gameId, myUid = effect.myUid)
+                            )
+                        } catch (e2: Exception) {
+                            Timber.e(e2, "ShipPlacementScreen: NavigateToOnlineBattle retry also failed")
+                        }
                     }
+                }
                 is PlacementViewModel.UiEffect.NavigateToHandOff ->
                     navController.navigate(
                         HandOffRoute(
@@ -213,52 +232,53 @@ fun ShipPlacementScreen(
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 )
 
-                // ── Ship tray (with reduced long-press threshold) ────────────
-                // CompositionLocalProvider overrides the OS long-press timeout
-                // from the default 500ms down to 150ms so dragging feels snappy.
-                val currentViewConfig = LocalViewConfiguration.current
-                CompositionLocalProvider(
-                    LocalViewConfiguration provides object : ViewConfiguration by currentViewConfig {
-                        override val longPressTimeoutMillis: Long get() = 150L
-                    }
-                ) {
-                    ShipSelectionTray(
-                        uiState           = uiState,
-                        currentDragShipId = dragShipId,
-                        onSelectShip      = { shipId ->
-                            viewModel.onEvent(PlacementViewModel.UiEvent.SelectShip(shipId))
-                        },
-                        onRotateShip      = { shipId ->
-                            viewModel.onEvent(PlacementViewModel.UiEvent.RotateShip(shipId))
-                        },
-                        onDragStarted     = { shipId, absOffset ->
-                            dragShipId = shipId
-                            dragOffset = absOffset
-                            viewModel.onEvent(PlacementViewModel.UiEvent.SetDragging(shipId))
-                        },
-                        onDragMoved       = { shipId, absOffset ->
-                            dragOffset = absOffset
-                            val coord  = offsetToGridCoord(absOffset)
-                            viewModel.onEvent(
-                                PlacementViewModel.UiEvent.HoverShip(shipId, coord ?: Coord(-1))
-                            )
-                        },
-                        onDragEnded       = { absOffset ->
-                            val id    = dragShipId
-                            val coord = offsetToGridCoord(absOffset)
-                            if (id != null && coord != null) {
-                                viewModel.onEvent(PlacementViewModel.UiEvent.PlaceShip(id, coord))
-                            } else {
-                                viewModel.onEvent(PlacementViewModel.UiEvent.ClearHover)
-                            }
-                            dragShipId = null
-                        },
-                        onDragCancelled   = {
-                            dragShipId = null
+                // ── Ship tray ────────────────────────────────────────────────
+                // NOTE: CompositionLocalProvider with longPressTimeoutMillis override is now
+                // applied INSIDE each LazyRow item (see ShipSelectionTray), not outside it.
+                // Reason: LazyRow creates items in a subcomposition scope. Providing
+                // LocalViewConfiguration outside the LazyRow does NOT reliably propagate
+                // the override into item content in all Compose versions — the items may
+                // capture the default system ViewConfiguration (500ms long-press) instead
+                // of the 150ms override, making drag feel sluggish.
+                // The fix moves the CompositionLocalProvider inside each item's Column so
+                // the pointerInput block for detectDragGesturesAfterLongPress always sees
+                // the overridden 150ms timeout.
+                ShipSelectionTray(
+                    uiState           = uiState,
+                    currentDragShipId = dragShipId,
+                    onSelectShip      = { shipId ->
+                        viewModel.onEvent(PlacementViewModel.UiEvent.SelectShip(shipId))
+                    },
+                    onRotateShip      = { shipId ->
+                        viewModel.onEvent(PlacementViewModel.UiEvent.RotateShip(shipId))
+                    },
+                    onDragStarted     = { shipId, absOffset ->
+                        dragShipId = shipId
+                        dragOffset = absOffset
+                        viewModel.onEvent(PlacementViewModel.UiEvent.SetDragging(shipId))
+                    },
+                    onDragMoved       = { shipId, absOffset ->
+                        dragOffset = absOffset
+                        val coord  = offsetToGridCoord(absOffset)
+                        viewModel.onEvent(
+                            PlacementViewModel.UiEvent.HoverShip(shipId, coord ?: Coord(-1))
+                        )
+                    },
+                    onDragEnded       = { absOffset ->
+                        val id    = dragShipId
+                        val coord = offsetToGridCoord(absOffset)
+                        if (id != null && coord != null) {
+                            viewModel.onEvent(PlacementViewModel.UiEvent.PlaceShip(id, coord))
+                        } else {
                             viewModel.onEvent(PlacementViewModel.UiEvent.ClearHover)
-                        },
-                    )
-                }
+                        }
+                        dragShipId = null
+                    },
+                    onDragCancelled   = {
+                        dragShipId = null
+                        viewModel.onEvent(PlacementViewModel.UiEvent.ClearHover)
+                    },
+                )
 
                 // ── Action buttons ───────────────────────────────────────────
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -510,127 +530,147 @@ private fun ShipSelectionTray(
                     label         = "shipAlpha${shipDef.id}",
                 )
 
-                Column(
-                    modifier = Modifier
-                        .graphicsLayer {
-                            alpha  = itemAlpha
-                            scaleX = if (isDragging) 0.9f else 1f
-                            scaleY = if (isDragging) 0.9f else 1f
-                        }
-                        .border(
-                            width  = if (isSelected || isDragging) 2.dp else 1.dp,
-                            color  = borderColor,
-                            shape  = RoundedCornerShape(8.dp),
-                        )
-                        .background(
-                            color = when {
-                                isDragging -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                                isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                isPlaced   -> ValidGreen.copy(alpha = 0.1f)
-                                else       -> MaterialTheme.colorScheme.surface
-                            },
-                            shape = RoundedCornerShape(8.dp),
-                        )
-                        .onGloballyPositioned { coords ->
-                            shipItemPositions[shipDef.id] = coords.positionInRoot()
-                        }
-                        .pointerInput(shipDef.id) {
-                            var currentAbsOffset = Offset.Zero
-                            detectDragGesturesAfterLongPress(
-                                onDragStart = { localOffset ->
-                                    currentAbsOffset =
-                                        (shipItemPositions[shipDef.id] ?: Offset.Zero) + localOffset
-                                    onDragStarted(shipDef.id, currentAbsOffset)
+                // FIX: CompositionLocalProvider with longPressTimeoutMillis = 150L is now
+                // inside each LazyRow item, wrapping the Column that contains the
+                // pointerInput(detectDragGesturesAfterLongPress) modifier.
+                //
+                // Previously it was outside the LazyRow in ShipPlacementScreen.
+                // LazyRow items are composed in a subcomposition scope, so the
+                // LocalViewConfiguration override from outside did NOT reliably propagate
+                // into item content — items captured the system default 500ms timeout
+                // instead of 150ms, making drag activation feel sluggish.
+                //
+                // Placing CompositionLocalProvider directly inside the item ensures the
+                // overridden ViewConfiguration is captured by pointerInput at the correct
+                // composition site, giving instant (150ms) drag activation every time.
+                val currentViewConfig = LocalViewConfiguration.current
+                CompositionLocalProvider(
+                    LocalViewConfiguration provides object : ViewConfiguration by currentViewConfig {
+                        override val longPressTimeoutMillis: Long get() = 150L
+                    }
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .graphicsLayer {
+                                alpha  = itemAlpha
+                                scaleX = if (isDragging) 0.9f else 1f
+                                scaleY = if (isDragging) 0.9f else 1f
+                            }
+                            .border(
+                                width  = if (isSelected || isDragging) 2.dp else 1.dp,
+                                color  = borderColor,
+                                shape  = RoundedCornerShape(8.dp),
+                            )
+                            .background(
+                                color = when {
+                                    isDragging -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                                    isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                    isPlaced   -> ValidGreen.copy(alpha = 0.1f)
+                                    else       -> MaterialTheme.colorScheme.surface
                                 },
-                                onDrag = { change, delta ->
-                                    change.consume()
-                                    currentAbsOffset += delta
-                                    onDragMoved(shipDef.id, currentAbsOffset)
-                                },
-                                onDragEnd    = { onDragEnded(currentAbsOffset) },
-                                onDragCancel = { onDragCancelled() },
+                                shape = RoundedCornerShape(8.dp),
+                            )
+                            .onGloballyPositioned { coords ->
+                                shipItemPositions[shipDef.id] = coords.positionInRoot()
+                            }
+                            .pointerInput(shipDef.id) {
+                                var currentAbsOffset = Offset.Zero
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = { localOffset ->
+                                        currentAbsOffset =
+                                            (shipItemPositions[shipDef.id] ?: Offset.Zero) + localOffset
+                                        onDragStarted(shipDef.id, currentAbsOffset)
+                                    },
+                                    onDrag = { change, delta ->
+                                        change.consume()
+                                        currentAbsOffset += delta
+                                        onDragMoved(shipDef.id, currentAbsOffset)
+                                    },
+                                    onDragEnd    = { onDragEnded(currentAbsOffset) },
+                                    onDragCancel = { onDragCancelled() },
+                                )
+                            }
+                            .clickable { onSelectShip(shipDef.id) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        // Ship name
+                        Text(
+                            text       = shipDef.name,
+                            style      = MaterialTheme.typography.labelSmall,
+                            color      = if (isPlaced) ValidGreen else MaterialTheme.colorScheme.onSurface,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        )
+
+                        // Ship cell visualisation
+                        val isVertical = orientation is Orientation.Vertical
+                        if (isVertical) {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                repeat(shipDef.size) {
+                                    Box(
+                                        Modifier
+                                            .size(10.dp)
+                                            .background(
+                                                color = when {
+                                                    isPlaced   -> ValidGreen
+                                                    isSelected -> MaterialTheme.colorScheme.primary
+                                                    else       -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                                },
+                                                shape = RoundedCornerShape(2.dp),
+                                            )
+                                    )
+                                }
+                            }
+                        } else {
+                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                repeat(shipDef.size) {
+                                    Box(
+                                        Modifier
+                                            .size(10.dp)
+                                            .background(
+                                                color = when {
+                                                    isPlaced   -> ValidGreen
+                                                    isSelected -> MaterialTheme.colorScheme.primary
+                                                    else       -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                                },
+                                                shape = RoundedCornerShape(2.dp),
+                                            )
+                                    )
+                                }
+                            }
+                        }
+
+                        // Orientation indicator + rotate button
+                        Row(
+                            verticalAlignment     = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        ) {
+                            Text(
+                                text  = if (orientation is Orientation.Horizontal) "H" else "V",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            )
+                            Icon(
+                                imageVector        = Icons.Default.Refresh,
+                                contentDescription = "Rotate ${shipDef.name}",
+                                modifier           = Modifier
+                                    .size(14.dp)
+                                    .clickable { onRotateShip(shipDef.id) },
+                                tint               = MaterialTheme.colorScheme.primary,
                             )
                         }
-                        .clickable { onSelectShip(shipDef.id) }
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    // Ship name
-                    Text(
-                        text       = shipDef.name,
-                        style      = MaterialTheme.typography.labelSmall,
-                        color      = if (isPlaced) ValidGreen else MaterialTheme.colorScheme.onSurface,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    )
 
-                    // Ship cell visualisation
-                    val isVertical = orientation is Orientation.Vertical
-                    if (isVertical) {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                            repeat(shipDef.size) {
-                                Box(
-                                    Modifier
-                                        .size(10.dp)
-                                        .background(
-                                            color = when {
-                                                isPlaced   -> ValidGreen
-                                                isSelected -> MaterialTheme.colorScheme.primary
-                                                else       -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                                            },
-                                            shape = RoundedCornerShape(2.dp),
-                                        )
-                                )
-                            }
-                        }
-                    } else {
-                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            repeat(shipDef.size) {
-                                Box(
-                                    Modifier
-                                        .size(10.dp)
-                                        .background(
-                                            color = when {
-                                                isPlaced   -> ValidGreen
-                                                isSelected -> MaterialTheme.colorScheme.primary
-                                                else       -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
-                                            },
-                                            shape = RoundedCornerShape(2.dp),
-                                        )
-                                )
-                            }
+                        // Placed checkmark
+                        if (isPlaced) {
+                            Text(
+                                text  = "✓",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = ValidGreen,
+                            )
                         }
                     }
-
-                    // Orientation indicator + rotate button
-                    Row(
-                        verticalAlignment     = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Text(
-                            text  = if (orientation is Orientation.Horizontal) "H" else "V",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        )
-                        Icon(
-                            imageVector        = Icons.Default.Refresh,
-                            contentDescription = "Rotate ${shipDef.name}",
-                            modifier           = Modifier
-                                .size(14.dp)
-                                .clickable { onRotateShip(shipDef.id) },
-                            tint               = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-
-                    // Placed checkmark
-                    if (isPlaced) {
-                        Text(
-                            text  = "✓",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = ValidGreen,
-                        )
-                    }
-                }
+                } // end CompositionLocalProvider
             }
         }
     }
