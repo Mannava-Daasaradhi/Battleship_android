@@ -1,0 +1,165 @@
+=========================================================
+BATTLESHIP FLEET COMMAND — PHASE 6 BUG DIAGNOSIS
+=========================================================
+
+REPO CLONED: https://github.com/Mannava-Daasaradhi/Battleship_android
+FILES READ:
+  - database.rules.json
+  - core/multiplayer/src/main/kotlin/.../repository/FirebaseMatchRepositoryImpl.kt
+  - feature/game/src/main/kotlin/.../online/OnlineGameViewModel.kt
+  - core/multiplayer/src/main/kotlin/.../matchmaking/MatchmakingRepository.kt
+  - core/multiplayer/src/main/kotlin/.../FirebaseSchema.kt
+
+=========================================================
+ROOT CAUSE (single file, single rule)
+=========================================================
+
+FILE:  database.rules.json
+NODE:  games/$gameId/meta  (.write rule)
+
+The current meta .write rule allows writing ONLY when ONE of:
+  (a) meta node does not yet exist (!data.exists())           → true only on game creation
+  (b) caller is the HOST (data.child('hostUid') === auth.uid)
+  (c) claiming guestUid slot (guestUid was null, now = my uid) → one-time write, only for that field
+
+THE GUEST UID IS NEVER ALLOWED TO WRITE TO meta AFTER CLAIMING THEIR SLOT.
+
+This silently (PERMISSION_DENIED caught, logged as a warning) blocks FOUR critical
+operations that the GUEST device must perform at runtime:
+
+  1. joinGame() Step 7 — advance status "waiting" → "setup"
+     Called by: GUEST in MatchmakingRepository.joinGame()
+     Line: metaRef.child(STATUS).setValue(STATUS_SETUP).await()
+     Effect: game stays in "waiting" forever — WaitingForOpponent screen
+             never advances to ship placement on both devices.
+             (Currently non-fatal catch swallows the error silently)
+
+  2. submitShipPlacement() bothReady check — advance status "setup" → "battle"
+     Called by: whoever submits ships LAST. If GUEST submits last → DENIED.
+     Effect: game is permanently stuck on the "Waiting for opponent" shimmer screen.
+             Users call this a "crash". This is the primary reported bug.
+
+  3. flipTurn() — write meta/currentTurn after resolving an opponent shot
+     Called by: the DEFENDER after resolving each incoming shot.
+             The GUEST is the defender on HOST's turn.
+     Effect: turn never flips back to the GUEST. HOST fires, GUEST can never fire.
+             Game deadlocks after the very first shot.
+
+  4. claimVictory() — write meta/winner + meta/status="finished"
+     Called by: whoever wins (could be GUEST)
+     Effect: GUEST cannot ever formally end the game. HOST device never navigates
+             to GameOverScreen if GUEST is the winner.
+
+=========================================================
+WHY THE KOTLIN CODE IS CORRECT AND COMPLETE
+=========================================================
+
+submitShipPlacement():
+  - Sets boards/ships JSON for this player ✅
+  - Sets players/{uid}/ready = true ✅
+  - Reads players node, counts entries, checks all ready ✅
+  - Guards against overwriting "finished" status ✅
+  - Wraps the bothReady check in a try/catch (non-fatal) ✅
+
+OnlineGameViewModel:
+  - observeGameState: maps "setup"→WAITING, "battle"→BATTLE, "finished"→FINISHED ✅
+  - observeOpponentShots: calls writeShotResult + flipTurn on each unresolved shot ✅
+  - handleGameStateUpdate: guards NavigateToGameOver with navigatedToGameOver flag ✅
+  - loadMyPlacements: retries up to 5× with 300ms delay to handle Room race ✅
+
+The KOTLIN CODE DOES NOT NEED TO CHANGE.
+
+=========================================================
+THE FIX — ONE FILE ONLY
+=========================================================
+
+FILE: database.rules.json
+
+Add ONE condition to the meta .write rule:
+  data.child('guestUid').val() === auth.uid
+
+This allows the guest — once their UID has been written into meta/guestUid —
+to write any field within meta. This is safe because:
+  - Condition only triggers when the caller's UID EQUALS the stored guestUid
+  - An attacker cannot write their UID as guestUid first (that is condition 4,
+    only valid when guestUid is null)
+  - Once a legitimate participant, they can update status/currentTurn/winner
+  - Only authenticated Firebase users can trigger this path
+
+BEFORE (broken):
+  ".write": "auth != null && (
+    !data.exists() ||
+    data.child('hostUid').val() === auth.uid ||
+    (
+      data.child('guestUid').val() === null &&
+      newData.child('guestUid').val() === auth.uid
+    )
+  )"
+
+AFTER (fixed):
+  ".write": "auth != null && (
+    !data.exists() ||
+    data.child('hostUid').val() === auth.uid ||
+    data.child('guestUid').val() === auth.uid ||
+    (
+      data.child('guestUid').val() === null &&
+      newData.child('guestUid').val() === auth.uid
+    )
+  )"
+
+=========================================================
+SCENARIO WALKTHROUGH POST-FIX
+=========================================================
+
+Scenario A — HOST submits ships last:
+  GUEST submits → bothReady=false → no status change (no write attempted)
+  HOST submits → bothReady=true → HOST writes status="battle" → SUCCEEDS (host always could)
+  ✅ Battle starts
+
+Scenario B — GUEST submits ships last:
+  HOST submits → bothReady=false → no status change
+  GUEST submits → bothReady=true → GUEST writes status="battle" → SUCCEEDS (rules now allow)
+  ✅ Battle starts
+
+Scenario C — Both submit simultaneously (race):
+  Both see bothReady=true. Both read currentStatus="setup". Both attempt write="battle".
+  Firebase handles concurrent writes; "battle" is idempotent — writing it twice is harmless.
+  ✅ Battle starts
+
+Scenario D — GUEST wins battle:
+  GUEST calls claimVictory() → writes meta/winner=guestUid, meta/status="finished"
+  SUCCEEDS (rules now allow) → both devices navigate to GameOverScreen ✅
+
+Scenario E — flipTurn during battle (GUEST is defender):
+  HOST fires. GUEST's device resolves the shot. GUEST calls flipTurn(nextTurn=GUEST).
+  SUCCEEDS (rules now allow) → meta/currentTurn = guestUid → GUEST's turn ✅
+
+=========================================================
+FILES CHANGED
+=========================================================
+
+  1. database.rules.json  — Added guestUid participant write condition to meta node
+
+FILES NOT CHANGED (confirmed correct):
+  - FirebaseMatchRepositoryImpl.kt
+  - OnlineGameViewModel.kt
+  - MatchmakingRepository.kt
+  - All Kotlin source files
+
+=========================================================
+NO AD-RELATED CODE TOUCHED
+=========================================================
+No ad imports, classes, or references were introduced or modified.
+
+=========================================================
+INSTRUCT.MD COMPLIANCE CHECK
+=========================================================
+
+Section 6 (Online Multiplayer / Firebase): Fix aligns with the spec —
+  participants must be able to drive game state.
+Section 2 (Tech Stack): No new dependencies added.
+Section 6 Firebase Rules: The spirit of the rules is "only game participants
+  can write". Adding guestUid as an allowed writer honours that spirit.
+ZERO paid dependencies: confirmed.
+100% Kotlin: no Java introduced.
+=========================================================

@@ -10,10 +10,21 @@
 
     "games": {
       "$gameId": {
-        ".read": "auth != null && (\n          data.child('meta/hostUid').val() === auth.uid ||\n          data.child('meta/guestUid').val() === auth.uid\n        )",
+        ".read": "auth != null && (
+          data.child('meta/hostUid').val() === auth.uid ||
+          data.child('meta/guestUid').val() === auth.uid
+        )",
 
         "meta": {
-          ".write": "auth != null && (\n            !data.exists() ||\n            data.child('hostUid').val() === auth.uid ||\n            (\n              data.child('guestUid').val() === null &&\n              newData.child('guestUid').val() === auth.uid\n            )\n          )"
+          ".write": "auth != null && (
+            !data.exists() ||
+            data.child('hostUid').val() === auth.uid ||
+            data.child('guestUid').val() === auth.uid ||
+            (
+              data.child('guestUid').val() === null &&
+              newData.child('guestUid').val() === auth.uid
+            )
+          )"
         },
 
         "players": {
@@ -25,7 +36,10 @@
         "boards": {
           "$uid": {
             ".write": "auth != null && auth.uid === $uid && !data.exists()",
-            ".read":  "auth != null && (\n              auth.uid === $uid ||\n              root.child('games').child($gameId).child('meta/status').val() === 'finished'\n            )"
+            ".read":  "auth != null && (
+              auth.uid === $uid ||
+              root.child('games').child($gameId).child('meta/status').val() === 'finished'
+            )"
           }
         },
 
@@ -33,9 +47,16 @@
           "$shooterUid": {
             ".write": "auth != null && auth.uid === $shooterUid",
             "$shotPushKey": {
-              ".write": "auth != null && auth.uid === $shooterUid && (\n                !data.exists() ||\n                (newData.child('timestamp').val() - data.child('timestamp').val() > 500)\n              )",
+              ".write": "auth != null && auth.uid === $shooterUid && (
+                !data.exists() ||
+                (newData.child('timestamp').val() - data.child('timestamp').val() > 500)
+              )",
               "result": {
-                ".write": "auth != null &&\n                  auth.uid !== $shooterUid && (\n                    root.child('games').child($gameId).child('meta/hostUid').val() === auth.uid ||\n                    root.child('games').child($gameId).child('meta/guestUid').val() === auth.uid\n                  ) && !data.exists()"
+                ".write": "auth != null &&
+                  auth.uid !== $shooterUid && (
+                    root.child('games').child($gameId).child('meta/hostUid').val() === auth.uid ||
+                    root.child('games').child($gameId).child('meta/guestUid').val() === auth.uid
+                  ) && !data.exists()"
               }
             }
           }
@@ -43,7 +64,10 @@
 
         "chat": {
           "$messageId": {
-            ".write": "auth != null && (\n              root.child('games').child($gameId).child('meta/hostUid').val() === auth.uid ||\n              root.child('games').child($gameId).child('meta/guestUid').val() === auth.uid\n            ) && newData.child('text').val().length <= 50"
+            ".write": "auth != null && (
+              root.child('games').child($gameId).child('meta/hostUid').val() === auth.uid ||
+              root.child('games').child($gameId).child('meta/guestUid').val() === auth.uid
+            ) && newData.child('text').val().length <= 50"
           }
         }
       }
