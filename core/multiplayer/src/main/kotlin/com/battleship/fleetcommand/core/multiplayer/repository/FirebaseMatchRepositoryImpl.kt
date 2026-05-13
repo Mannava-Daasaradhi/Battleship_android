@@ -45,17 +45,14 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
 
     private var lastShotTimestampMs: Long = 0L
 
-    // ── createGame ────────────────────────────────────────────────────────────
     override fun createGame(playerName: String): Flow<GameCreationResult> = flow {
         emit(matchmakingRepository.createGame(playerName))
     }
 
-    // ── joinGame ──────────────────────────────────────────────────────────────
     override fun joinGame(roomCode: String, playerName: String): Flow<JoinResult> = flow {
         emit(matchmakingRepository.joinGame(roomCode, playerName))
     }
 
-    // ── observeGameState ──────────────────────────────────────────────────────
     override fun observeGameState(gameId: String): Flow<OnlineGameState> = callbackFlow {
         val myUid = authManager.currentUid ?: run {
             close(IllegalStateException("Not authenticated"))
@@ -68,13 +65,10 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
                 val state = mapper.mapGameSnapshot(snapshot, myUid)
                 if (state != null) {
                     trySend(state)
-                } else {
-                    Timber.w("FirebaseMatchRepositoryImpl: observeGameState — mapper returned null for gameId=$gameId")
                 }
             }
 
             override fun onCancelled(error: DatabaseError) {
-                Timber.e("FirebaseMatchRepositoryImpl: observeGameState cancelled error=${error.message}")
                 close(error.toException())
             }
         }
@@ -83,20 +77,8 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
         awaitClose { gameRef.removeEventListener(listener) }
     }
 
-    // ── submitShipPlacement ───────────────────────────────────────────────────
-    // Serialises List<ShipPlacement> -> List<ShipPlacementDto> -> JSON string.
-    // ShipPlacement and Coord are NOT @Serializable so we map to DTO first.
-    //
-    // After marking this player ready, reads the players node to check whether
-    // both participants are now ready. If so, advances status "setup" → "battle"
-    // so both devices' WaitingForOpponentViewModels (if still watching) and
-    // OnlineGameViewModels transition to the battle phase.
-    override suspend fun submitShipPlacement(
-        gameId: String,
-        ships: List<ShipPlacement>
-    ): Result<Unit> {
-        val myUid = authManager.currentUid
-            ?: return Result.failure(Exception("Not authenticated"))
+    override suspend fun submitShipPlacement(gameId: String, ships: List<ShipPlacement>): Result<Unit> {
+        val myUid = authManager.currentUid ?: return Result.failure(Exception("Not authenticated"))
 
         return try {
             val dtos: List<ShipPlacementDto> = ships.map { placement ->
@@ -115,53 +97,34 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
             gameRef.child("${FirebaseSchema.PLAYERS}/$myUid/${FirebaseSchema.PLAYER_READY}")
                 .setValue(true).await()
 
-            Timber.d("FirebaseMatchRepositoryImpl: submitShipPlacement success gameId=$gameId uid=$myUid")
-
-            // ── Check if both players are now ready → advance to "battle" ────────
-            // Read the full players node and check every player's ready flag.
-            // Two players must be present and both ready before we advance status.
             try {
                 val playersSnapshot = gameRef.child(FirebaseSchema.PLAYERS).get().await()
                 val playerEntries = playersSnapshot.children.toList()
                 val bothReady = playerEntries.size >= 2 &&
                         playerEntries.all { playerSnap ->
-                            playerSnap.child(FirebaseSchema.PLAYER_READY)
-                                .getValue(Boolean::class.java) == true
+                            playerSnap.child(FirebaseSchema.PLAYER_READY).getValue(Boolean::class.java) == true
                         }
 
                 if (bothReady) {
                     val metaRef = gameRef.child(FirebaseSchema.META)
-                    // Only advance if currently in "setup" to avoid overwriting "finished".
-                    val currentStatus = metaRef.child(FirebaseSchema.STATUS)
-                        .get().await()
-                        .getValue(String::class.java)
+                    val currentStatus = metaRef.child(FirebaseSchema.STATUS).get().await().getValue(String::class.java)
 
                     if (currentStatus == FirebaseSchema.STATUS_SETUP) {
-                        metaRef.child(FirebaseSchema.STATUS)
-                            .setValue(FirebaseSchema.STATUS_BATTLE)
-                            .await()
-                        Timber.d("FirebaseMatchRepositoryImpl: submitShipPlacement both ready — advanced status setup→battle gameId=$gameId")
+                        metaRef.child(FirebaseSchema.STATUS).setValue(FirebaseSchema.STATUS_BATTLE).await()
                     }
                 }
             } catch (readyCheckEx: Exception) {
-                // Non-fatal: the "battle" advancement is best-effort here.
-                // The second player's device will also call submitShipPlacement and
-                // will attempt the same check, so one of the two devices will succeed.
-                Timber.w(readyCheckEx, "FirebaseMatchRepositoryImpl: submitShipPlacement ready-check failed gameId=$gameId")
+                Timber.w(readyCheckEx, "Ready-check failed")
             }
 
             Result.success(Unit)
         } catch (e: Exception) {
-            Timber.e(e, "FirebaseMatchRepositoryImpl: submitShipPlacement failed")
             Result.failure(e)
         }
     }
 
-    // ── fireShot ──────────────────────────────────────────────────────────────
     override suspend fun fireShot(gameId: String, coord: Coord): Result<Unit> {
-        val myUid = authManager.currentUid
-            ?: return Result.failure(Exception("Not authenticated"))
-
+        val myUid = authManager.currentUid ?: return Result.failure(Exception("Not authenticated"))
         val now = System.currentTimeMillis()
         if (now - lastShotTimestampMs < GameConstants.SHOT_RATE_LIMIT_MS) {
             return Result.failure(Exception("Shot rate limit exceeded"))
@@ -181,35 +144,18 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
                 .setValue(shotData)
                 .await()
 
-            Timber.d("FirebaseMatchRepositoryImpl: fireShot gameId=$gameId coord=(${coord.rowOf()},${coord.colOf()})")
             Result.success(Unit)
         } catch (e: Exception) {
-            Timber.e(e, "FirebaseMatchRepositoryImpl: fireShot failed")
             Result.failure(e)
         }
     }
 
-    // ── observeOpponentShots ──────────────────────────────────────────────────
-    // Listens to the shots/ node. Emits a flat List<ShotData> of ALL opponent shots
-    // whenever any new shot arrives or an existing shot's result is written.
-    //
-    // BUG 1 FIX: The original onChildChanged handler called accumulated.removeAll { true }
-    // and rebuilt only from the changed shooter's snapshot. This wiped shots from any
-    // other shooter already in accumulated. The fix: keep a per-shooter map and rebuild
-    // the flat list from the full map on every change, so shots from other shooters are
-    // never lost.
     override fun observeOpponentShots(gameId: String): Flow<List<ShotData>> = callbackFlow {
         val myUid = authManager.currentUid ?: run {
             close(IllegalStateException("Not authenticated"))
             return@callbackFlow
         }
-        val shotsRef = database.getReference(
-            "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.SHOTS}"
-        )
-
-        // Per-shooter shot list. Key = shooterUid, value = all shots from that shooter.
-        // Using a map means onChildChanged only replaces the affected shooter's list,
-        // preserving shots from all other shooters.
+        val shotsRef = database.getReference("${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.SHOTS}")
         val shotsByShooter = mutableMapOf<String, List<ShotData>>()
 
         val listener = object : ChildEventListener {
@@ -224,18 +170,12 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
             override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {
                 val shooterUid = snapshot.key ?: return
                 if (shooterUid == myUid) return
-                // BUG 1 FIX: Rebuild only this shooter's list from the updated snapshot.
-                // All other shooters' shots remain intact in the map.
                 val shots = snapshot.children.mapNotNull { mapper.mapShotSnapshot(it) }
                 shotsByShooter[shooterUid] = shots
                 trySend(shotsByShooter.values.flatten())
             }
 
-            override fun onCancelled(error: DatabaseError) {
-                Timber.e("FirebaseMatchRepositoryImpl: observeOpponentShots cancelled error=${error.message}")
-                close(error.toException())
-            }
-
+            override fun onCancelled(error: DatabaseError) { close(error.toException()) }
             override fun onChildRemoved(snapshot: DataSnapshot) {}
             override fun onChildMoved(snapshot: DataSnapshot, previousChildName: String?) {}
         }
@@ -244,82 +184,54 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
         awaitClose { shotsRef.removeEventListener(listener) }
     }
 
-    // ── setPresence ───────────────────────────────────────────────────────────
     override suspend fun setPresence(gameId: String, connected: Boolean) {
         val myUid = authManager.currentUid ?: return
         try {
-            val playerRef = database.getReference(
-                "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.PLAYERS}/$myUid"
-            )
+            val playerRef = database.getReference("${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.PLAYERS}/$myUid")
             playerRef.child(FirebaseSchema.PLAYER_CONNECTED).setValue(connected).await()
             playerRef.child(FirebaseSchema.PLAYER_LAST_SEEN).setValue(ServerValue.TIMESTAMP).await()
-            Timber.d("FirebaseMatchRepositoryImpl: setPresence gameId=$gameId connected=$connected")
-        } catch (e: Exception) {
-            Timber.e(e, "FirebaseMatchRepositoryImpl: setPresence failed")
-        }
+        } catch (e: Exception) {}
     }
 
-    // ── claimVictory ──────────────────────────────────────────────────────────
     override suspend fun claimVictory(gameId: String): Result<Unit> {
-        val myUid = authManager.currentUid
-            ?: return Result.failure(Exception("Not authenticated"))
+        val myUid = authManager.currentUid ?: return Result.failure(Exception("Not authenticated"))
         return try {
-            val metaRef = database.getReference(
-                "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.META}"
-            )
+            val metaRef = database.getReference("${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.META}")
             metaRef.child(FirebaseSchema.WINNER).setValue(myUid).await()
             metaRef.child(FirebaseSchema.STATUS).setValue(FirebaseSchema.STATUS_FINISHED).await()
-            Timber.d("FirebaseMatchRepositoryImpl: claimVictory gameId=$gameId winner=$myUid")
             Result.success(Unit)
         } catch (e: Exception) {
-            Timber.e(e, "FirebaseMatchRepositoryImpl: claimVictory failed")
             Result.failure(e)
         }
     }
 
-    // ── writeShotResult ───────────────────────────────────────────────────────
-    // Called by the DEFENDER only. Writes result to the shot at the given ordinal
-    // index within the shooter's push-key list. Queries children to resolve index
-    // to push-key, then updates the result field.
-    override suspend fun writeShotResult(
-        gameId: String,
-        shooterUid: String,
-        shotIndex: Int,
-        result: FireResult
-    ) {
-        try {
-            val shotsRef = database.getReference(
-                "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.SHOTS}/$shooterUid"
-            )
-            val snapshot = shotsRef.get().await()
-            val pushKey = snapshot.children.elementAtOrNull(shotIndex)?.key
-                ?: run {
-                    Timber.w("FirebaseMatchRepositoryImpl: writeShotResult — no shot at index=$shotIndex for shooter=$shooterUid")
-                    return
-                }
-
-            shotsRef.child(pushKey).child(FirebaseSchema.SHOT_RESULT)
-                .setValue(result.toSchemaString()).await()
-
-            Timber.d("FirebaseMatchRepositoryImpl: writeShotResult shooterUid=$shooterUid index=$shotIndex key=$pushKey result=$result")
+    override suspend fun forfeit(gameId: String, opponentUid: String): Result<Unit> {
+        return try {
+            val metaRef = database.getReference("${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.META}")
+            metaRef.child(FirebaseSchema.WINNER).setValue(opponentUid).await()
+            metaRef.child(FirebaseSchema.STATUS).setValue(FirebaseSchema.STATUS_FINISHED).await()
+            Result.success(Unit)
         } catch (e: Exception) {
-            Timber.e(e, "FirebaseMatchRepositoryImpl: writeShotResult failed")
+            Result.failure(e)
         }
     }
 
-    // ── flipTurn ──────────────────────────────────────────────────────────────
-    // Writes nextPlayerUid to games/$gameId/meta/currentTurn.
-    // Called by the DEFENDER after resolving each incoming shot so the turn
-    // switches to the defender (who now becomes the attacker).
+    override suspend fun writeShotResult(gameId: String, shooterUid: String, shotIndex: Int, result: FireResult) {
+        try {
+            val shotsRef = database.getReference("${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.SHOTS}/$shooterUid")
+            val snapshot = shotsRef.get().await()
+            val pushKey = snapshot.children.elementAtOrNull(shotIndex)?.key ?: return
+
+            shotsRef.child(pushKey).child(FirebaseSchema.SHOT_RESULT).setValue(result.toSchemaString()).await()
+        } catch (e: Exception) {}
+    }
+
     override suspend fun flipTurn(gameId: String, nextPlayerUid: String): Result<Unit> {
         return try {
             database.getReference("${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.META}/${FirebaseSchema.CURRENT_TURN}")
-                .setValue(nextPlayerUid)
-                .await()
-            Timber.d("FirebaseMatchRepositoryImpl: flipTurn gameId=$gameId nextTurn=$nextPlayerUid")
+                .setValue(nextPlayerUid).await()
             Result.success(Unit)
         } catch (e: Exception) {
-            Timber.e(e, "FirebaseMatchRepositoryImpl: flipTurn failed")
             Result.failure(e)
         }
     }

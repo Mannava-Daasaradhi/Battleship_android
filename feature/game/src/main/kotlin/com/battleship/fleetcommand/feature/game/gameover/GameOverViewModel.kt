@@ -8,7 +8,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
 import com.battleship.fleetcommand.core.domain.Coord
 import com.battleship.fleetcommand.core.domain.GameConstants
-import com.battleship.fleetcommand.core.domain.model.GameMode
 import com.battleship.fleetcommand.core.domain.player.PlayerSlot
 import com.battleship.fleetcommand.core.domain.repository.GameRepository
 import com.battleship.fleetcommand.core.domain.repository.StatsRepository
@@ -58,7 +57,6 @@ class GameOverViewModel @Inject constructor(
     }
 
     sealed class UiEffect {
-        // ADS PLACEHOLDER — owner will integrate AdMob interstitial here in a future update
         data object NavigateToMainMenu : UiEffect()
         data object NavigateToStatistics : UiEffect()
         data object NavigateToModeSelect : UiEffect()
@@ -81,21 +79,25 @@ class GameOverViewModel @Inject constructor(
         val winner = route.winner
         val isOnlineGame = gameId.isBlank()
 
-        // 1. FIXED LOGIC: Correctly determine online defeat vs local pass-and-play victory
         val isPlayerWin = when {
-            winner == "You" -> true                     // Online: local player won
-            isOnlineGame && winner != "You" -> false    // Online: opponent won
-            winner == "AI" -> false                     // Single player: AI won
-            winner.isBlank() -> false                   // Safety: no winner string
-            else -> true                                // Local Pass & Play: player name = win
+            winner == "You" -> true                     
+            isOnlineGame && winner != "You" -> false    
+            winner == "AI" -> false                     
+            winner.isBlank() -> false                   
+            else -> true                                
         }
 
         _uiState.update { it.copy(winner = winner, isPlayerWin = isPlayerWin) }
 
-        // If no local gameId (online game), skip DB query. 
-        // We will gracefully hide the stats section in the UI since it's in Firebase.
+        // Inject the stats directly from the route for Online Games
         if (isOnlineGame) {
-            _uiState.update { it.copy(isLoading = false) }
+            _uiState.update { 
+                it.copy(
+                    isLoading = false,
+                    totalShots = route.totalShots,
+                    accuracy = route.accuracy
+                ) 
+            }
             return
         }
 

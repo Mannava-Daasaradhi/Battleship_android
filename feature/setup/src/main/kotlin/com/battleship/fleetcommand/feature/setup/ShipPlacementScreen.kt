@@ -10,11 +10,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -28,7 +28,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,7 +51,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerEvent
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -79,29 +77,11 @@ import com.battleship.fleetcommand.core.ui.theme.NavySurface
 import com.battleship.fleetcommand.core.ui.theme.ValidGreen
 import com.battleship.fleetcommand.navigation.BattleRoute
 import com.battleship.fleetcommand.navigation.HandOffRoute
-import com.battleship.fleetcommand.navigation.MainMenuRoute
 import com.battleship.fleetcommand.navigation.OnlineBattleRoute
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 
-// ── DRAG LONG-PRESS THRESHOLD ─────────────────────────────────────────────────
-//
-// BUG FIX: was 150L — far too short. The Android system long-press threshold is
-// 500ms. At 150ms, any tap slower than 150ms (very common) accidentally activated
-// drag instead of tap. Additionally LazyRow's scroll gesture runs at the Initial
-// pass and consumed pointer events before our Main-pass handler saw them, causing
-// the withTimeoutOrNull inner loop to see consumed/stale pointer state.
-//
-// Fix 1: Raised to 500ms — matches the system ViewConfiguration.getLongPressTimeout()
-//         and is the value users intuitively understand as a long-press.
-// Fix 2: The tracking while-loop inside withTimeoutOrNull now uses
-//         PointerEventPass.Initial so we receive events BEFORE LazyRow's scroll
-//         handler consumes them. This makes the "finger still down?" check reliable
-//         regardless of scroll-gesture interception.
-// Fix 3: After drag is activated, the drag-tracking while-loop also uses
-//         PointerEventPass.Initial AND calls pointer.consume() to prevent LazyRow
-//         from scrolling while the user is dragging a ship.
 private const val DRAG_LONGPRESS_MS = 500L
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -114,14 +94,12 @@ fun ShipPlacementScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val density = LocalDensity.current
 
-    // ── Screen-level drag state ──────────────────────────────────────────────
     var dragShipId     by remember { mutableStateOf<ShipId?>(null) }
     var dragOffset     by remember { mutableStateOf(Offset.Zero) }
     var gridTopLeft    by remember { mutableStateOf(Offset.Zero) }
     var cellSizePx     by remember { mutableStateOf(0f) }
     var screenTopLeft  by remember { mutableStateOf(Offset.Zero) }
 
-    // Convert an absolute screen position (root coords) into a grid Coord.
     fun offsetToGridCoord(abs: Offset): Coord? {
         if (cellSizePx <= 0f) return null
         val rel = abs - gridTopLeft
@@ -147,34 +125,20 @@ fun ShipPlacementScreen(
                         popUpTo(com.battleship.fleetcommand.navigation.ModeSelectRoute) { inclusive = false }
                     }
                 is PlacementViewModel.UiEffect.NavigateToOnlineBattle -> {
-                    // MainMenuRoute is always the stack root for the online flow
-                    // (MainMenu → OnlineLobby → WaitingForOpponent → ShipPlacement).
-                    // ModeSelectRoute is NOT in the online back stack.
-                    //
-                    // BUG FIX: The previous code had a try/catch where the catch
-                    // retried without popUpTo. That retry left Lobby+Waiting+Placement
-                    // on the back stack, which then caused a crash in OnlineBattleScreen
-                    // when NavigateToGameOver tried to popUpTo MainMenuRoute on a dirty
-                    // stack. Fix: always use the graph's startDestinationId (which IS
-                    // MainMenuRoute) rather than the typed MainMenuRoute reference, so
-                    // the popUpTo never fails even if type-safe route serialisation has
-                    // a mismatch. If even that fails, we still navigate but with a clean
-                    // log rather than a crash.
                     try {
                         navController.navigate(
                             OnlineBattleRoute(gameId = effect.gameId, myUid = effect.myUid)
                         ) {
-                            // Use startDestinationId (Int-based) — always present, never fails.
                             popUpTo(navController.graph.startDestinationId) { inclusive = false }
                         }
                     } catch (e: Exception) {
-                        Timber.e(e, "ShipPlacementScreen: NavigateToOnlineBattle popUpTo failed — navigating without popUpTo")
+                        Timber.e(e, "ShipPlacementScreen: NavigateToOnlineBattle popUpTo failed")
                         try {
                             navController.navigate(
                                 OnlineBattleRoute(gameId = effect.gameId, myUid = effect.myUid)
                             )
                         } catch (e2: Exception) {
-                            Timber.e(e2, "ShipPlacementScreen: NavigateToOnlineBattle retry also failed")
+                            Timber.e(e2, "ShipPlacementScreen: retry failed")
                         }
                     }
                 }
@@ -187,8 +151,8 @@ fun ShipPlacementScreen(
                             phase       = effect.phase,
                         )
                     )
-                is PlacementViewModel.UiEffect.ShowPlacementError -> { /* future snackbar */ }
-                is PlacementViewModel.UiEffect.ShowError           -> { /* future snackbar */ }
+                is PlacementViewModel.UiEffect.ShowPlacementError -> { }
+                is PlacementViewModel.UiEffect.ShowError           -> { }
             }
         }
     }
@@ -212,15 +176,11 @@ fun ShipPlacementScreen(
             )
         }
     ) { paddingValues ->
-
-        // ── Outer Box — coordinate origin for the ghost overlay ──────────────
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .onGloballyPositioned { coords -> screenTopLeft = coords.positionInRoot() },
         ) {
-
-            // ── Main content column ──────────────────────────────────────────
             Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -229,8 +189,6 @@ fun ShipPlacementScreen(
                     .padding(horizontal = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-
-                // ── Placement grid ───────────────────────────────────────────
                 PlacementGridWithDrag(
                     uiState         = uiState,
                     onTapCell       = { coord ->
@@ -249,24 +207,19 @@ fun ShipPlacementScreen(
                     modifier        = Modifier.fillMaxWidth(),
                 )
 
-                // ── Hint text ────────────────────────────────────────────────
                 Text(
                     text = when {
                         uiState.isSubmitting           -> "Submitting fleet to server…"
                         dragShipId != null             -> "Drop on the grid to place"
                         uiState.selectedShipId != null ->
-                            "Tap grid to place • Double-tap placed ship to rotate"
+                            "Tap grid to place • Tap ROTATE below to flip ship"
                         else ->
-                            "Long-press & drag a ship onto the grid • Tap to select • Double-tap to rotate"
+                            "Long-press & drag a ship onto the grid • Tap to select"
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                 )
 
-                // ── Ship tray ────────────────────────────────────────────────
-                // NOTE: Drag is handled via raw pointerInput with awaitFirstDown +
-                // delay(500ms) + pointer tracking. This bypasses LocalViewConfiguration
-                // entirely and is reliably instant inside a LazyRow.
                 ShipSelectionTray(
                     uiState           = uiState,
                     currentDragShipId = dragShipId,
@@ -304,18 +257,41 @@ fun ShipPlacementScreen(
                     },
                 )
 
-                // ── Action buttons ───────────────────────────────────────────
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // ── The new 3-button layout ──
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     OutlinedButton(
                         onClick  = { viewModel.onEvent(PlacementViewModel.UiEvent.ClearAll) },
                         enabled  = !uiState.isSubmitting,
                         modifier = Modifier.weight(1f),
-                    ) { Text("CLEAR") }
+                        contentPadding = PaddingValues(horizontal = 4.dp)
+                    ) { 
+                        Text("CLEAR", style = MaterialTheme.typography.labelMedium) 
+                    }
+                    
+                    OutlinedButton(
+                        onClick  = { 
+                            uiState.selectedShipId?.let { shipId ->
+                                viewModel.onEvent(PlacementViewModel.UiEvent.RotateShip(shipId))
+                            }
+                        },
+                        enabled  = uiState.selectedShipId != null && !uiState.isSubmitting,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(horizontal = 4.dp)
+                    ) { 
+                        Text("ROTATE", style = MaterialTheme.typography.labelMedium) 
+                    }
+
                     OutlinedButton(
                         onClick  = { viewModel.onEvent(PlacementViewModel.UiEvent.AutoPlace) },
                         enabled  = !uiState.isAutoPlacing && !uiState.isSubmitting,
                         modifier = Modifier.weight(1f),
-                    ) { Text("AUTO") }
+                        contentPadding = PaddingValues(horizontal = 4.dp)
+                    ) { 
+                        Text("AUTO", style = MaterialTheme.typography.labelMedium) 
+                    }
                 }
 
                 if (uiState.isSubmitting) {
@@ -328,9 +304,8 @@ fun ShipPlacementScreen(
                         modifier = Modifier.fillMaxWidth(),
                     )
                 }
-            } // end Column
+            } 
 
-            // ── Floating ghost overlay ───────────────────────────────────────
             val ghostId = dragShipId
             if (ghostId != null && cellSizePx > 0f) {
                 val ship        = ShipRegistry.ALL.find { it.id == ghostId }
@@ -346,7 +321,7 @@ fun ShipPlacementScreen(
                     )
                 }
             }
-        } // end outer Box
+        } 
     }
 }
 
@@ -364,7 +339,6 @@ private fun PlacementGridWithDrag(
 ) {
     BoxWithConstraints(modifier = modifier) {
         val density     = LocalDensity.current
-        // 1 column for row labels + 10 grid columns = 11 units across the full width
         val cellSizeDp  = (maxWidth / (GameConstants.BOARD_SIZE + 1))
         val cellSizePx  = with(density) { cellSizeDp.toPx() }
 
@@ -375,9 +349,7 @@ private fun PlacementGridWithDrag(
                     onMeasured(coords.positionInRoot(), cellSizePx)
                 },
         ) {
-            // ── Column labels 1–10 ────────────────────────────────────────────
             Row {
-                // Corner spacer
                 Box(Modifier.size(cellSizeDp))
                 repeat(GameConstants.BOARD_SIZE) { col ->
                     Box(Modifier.size(cellSizeDp), contentAlignment = Alignment.Center) {
@@ -390,10 +362,8 @@ private fun PlacementGridWithDrag(
                 }
             }
 
-            // ── Grid rows ────────────────────────────────────────────────────
             repeat(GameConstants.BOARD_SIZE) { row ->
                 Row {
-                    // Row label A–J
                     Box(Modifier.size(cellSizeDp), contentAlignment = Alignment.Center) {
                         Text(
                             text  = ('A' + row).toString(),
@@ -437,12 +407,7 @@ private fun PlacementGridWithDrag(
                                         MaterialTheme.colorScheme.primary
                                     else GridLine,
                                 )
-                                .pointerInput(coord) {
-                                    detectTapGestures(
-                                        onTap       = { onTapCell(coord) },
-                                        onDoubleTap = { onDoubleTapCell(coord) },
-                                    )
-                                },
+                                .clickable { onTapCell(coord) }
                         )
                     }
                 }
@@ -552,40 +517,6 @@ private fun ShipSelectionTray(
                     label         = "shipAlpha${shipDef.id}",
                 )
 
-                // ── Gesture handler ───────────────────────────────────────────
-                //
-                // LONG PRESS BUG FIX — root cause and solution:
-                //
-                // PROBLEM 1 — threshold too short (150ms):
-                //   A normal human tap is 80–200ms. At 150ms, slow or deliberate taps
-                //   exceeded the threshold and triggered drag instead of selection.
-                //   Users couldn't reliably tap to select ships.
-                //
-                // PROBLEM 2 — wrong PointerEventPass:
-                //   The tracking while-loop used PointerEventPass.Main. LazyRow's internal
-                //   horizontal scroll gesture handler runs at PointerEventPass.Initial and
-                //   calls consume() on pointer events when it detects horizontal movement.
-                //   By the time Main pass ran, pointer events were already consumed by the
-                //   scroll handler. This made pointer.pressed unreliable (it could appear
-                //   "not pressed" even though the finger was still down), causing
-                //   withTimeoutOrNull to return true (tap) even on a genuine long-press.
-                //
-                // SOLUTION:
-                //   - DRAG_LONGPRESS_MS raised to 500ms (Android system standard).
-                //   - The tap-detection while-loop inside withTimeoutOrNull now uses
-                //     PointerEventPass.Initial so we see events BEFORE LazyRow consumes them.
-                //   - Once drag is activated (500ms elapsed), the drag-tracking while-loop
-                //     also uses PointerEventPass.Initial AND calls pointer.consume() on every
-                //     event, which prevents LazyRow from scrolling while a ship is being dragged.
-                //
-                // Gesture logic (unchanged):
-                //   - Await finger DOWN.
-                //   - Wait up to DRAG_LONGPRESS_MS (500ms) watching for finger UP → tap.
-                //   - Finger lifts before 500ms → onSelectShip (tap).
-                //   - 500ms elapses with finger still down → onDragStarted (drag).
-                //   - Track MOVE events → onDragMoved.
-                //   - Finger UP during drag → onDragEnded.
-                //   - Gesture cancelled → onDragCancelled.
                 Column(
                     modifier = Modifier
                         .graphicsLayer {
@@ -612,7 +543,6 @@ private fun ShipSelectionTray(
                         }
                         .pointerInput(shipDef.id) {
                             awaitEachGesture {
-                                // Wait for initial finger contact.
                                 val down = awaitFirstDown(requireUnconsumed = false)
                                 val startAbs = (shipItemPositions[shipDef.id] ?: Offset.Zero) +
                                         down.position
@@ -620,27 +550,15 @@ private fun ShipSelectionTray(
                                 var dragActivated = false
                                 var currentAbs    = startAbs
 
-                                // BUG FIX: Use PointerEventPass.Initial inside withTimeoutOrNull
-                                // so we receive events before LazyRow's scroll handler consumes
-                                // them. This makes the "finger still down?" check reliable.
-                                //
-                                // withTimeoutOrNull fires after DRAG_LONGPRESS_MS regardless of
-                                // whether pointer events arrive (the coroutine dispatcher's delay
-                                // mechanism runs independently of the event stream).
-                                //
-                                // Returns true  → finger lifted before 500ms timeout → tap
-                                // Returns null  → 500ms elapsed with finger still down → drag
                                 val wasTap = withTimeoutOrNull(DRAG_LONGPRESS_MS) {
                                     while (true) {
                                         val event: PointerEvent = awaitPointerEvent(
-                                            // BUG FIX: Initial pass — before LazyRow scroll consumes events.
                                             pass = PointerEventPass.Initial
                                         )
                                         val pointer = event.changes.firstOrNull() ?: break
                                         currentAbs = (shipItemPositions[shipDef.id]
                                             ?: Offset.Zero) + pointer.position
                                         if (!pointer.pressed) {
-                                            // Finger lifted before threshold → tap
                                             pointer.consume()
                                             return@withTimeoutOrNull true
                                         }
@@ -653,21 +571,16 @@ private fun ShipSelectionTray(
                                     return@awaitEachGesture
                                 }
 
-                                // 500ms elapsed with finger still down → drag activated.
                                 dragActivated = true
                                 onDragStarted(shipDef.id, currentAbs)
 
-                                // Track drag until finger lifts.
-                                // BUG FIX: Use PointerEventPass.Initial AND consume() every event
-                                // so LazyRow does not scroll while the user drags a ship.
                                 while (true) {
                                     val event: PointerEvent = awaitPointerEvent(
                                         pass = PointerEventPass.Initial
                                     )
                                     val pointer = event.changes.firstOrNull() ?: break
-                                    pointer.consume() // prevent LazyRow scroll during drag
+                                    pointer.consume()
                                     if (!pointer.pressed) {
-                                        // Finger lifted → end drag
                                         currentAbs = (shipItemPositions[shipDef.id]
                                             ?: Offset.Zero) + pointer.position
                                         onDragEnded(currentAbs)
@@ -678,7 +591,6 @@ private fun ShipSelectionTray(
                                     onDragMoved(shipDef.id, currentAbs)
                                 }
 
-                                // Pointer stream ended unexpectedly → cancel
                                 if (dragActivated) {
                                     onDragCancelled()
                                 }
@@ -688,7 +600,6 @@ private fun ShipSelectionTray(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    // Ship name
                     Text(
                         text       = shipDef.name,
                         style      = MaterialTheme.typography.labelSmall,
@@ -696,7 +607,6 @@ private fun ShipSelectionTray(
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                     )
 
-                    // Ship cell visualisation
                     val isVertical = orientation is Orientation.Vertical
                     if (isVertical) {
                         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -734,27 +644,13 @@ private fun ShipSelectionTray(
                         }
                     }
 
-                    // Orientation indicator + rotate button
-                    Row(
-                        verticalAlignment     = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Text(
-                            text  = if (orientation is Orientation.Horizontal) "H" else "V",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        )
-                        Icon(
-                            imageVector        = Icons.Default.Refresh,
-                            contentDescription = "Rotate ${shipDef.name}",
-                            modifier           = Modifier
-                                .size(14.dp)
-                                .clickable { onRotateShip(shipDef.id) },
-                            tint               = MaterialTheme.colorScheme.primary,
-                        )
-                    }
+                    // Kept just the H/V indicator without the tiny button
+                    Text(
+                        text  = if (orientation is Orientation.Horizontal) "Horizontal" else "Vertical",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    )
 
-                    // Placed checkmark
                     if (isPlaced) {
                         Text(
                             text  = "✓",

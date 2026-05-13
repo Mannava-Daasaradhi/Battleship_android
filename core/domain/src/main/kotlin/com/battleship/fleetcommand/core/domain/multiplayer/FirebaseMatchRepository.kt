@@ -6,12 +6,6 @@ import com.battleship.fleetcommand.core.domain.engine.FireResult
 import com.battleship.fleetcommand.core.domain.ship.ShipPlacement
 import kotlinx.coroutines.flow.Flow
 
-/**
- * Repository interface for Firebase Realtime DB online multiplayer operations.
- * Implemented in :core:multiplayer (FirebaseMatchRepositoryImpl).
- * Zero Android imports — pure Kotlin + coroutines only.
- * Section 6.10 spec.
- */
 interface FirebaseMatchRepository {
     fun createGame(playerName: String): Flow<GameCreationResult>
     fun joinGame(roomCode: String, playerName: String): Flow<JoinResult>
@@ -21,23 +15,12 @@ interface FirebaseMatchRepository {
     fun observeOpponentShots(gameId: String): Flow<List<ShotData>>
     suspend fun setPresence(gameId: String, connected: Boolean)
     suspend fun claimVictory(gameId: String): Result<Unit>
+    suspend fun forfeit(gameId: String, opponentUid: String): Result<Unit>
     suspend fun writeShotResult(
         gameId: String,
         shooterUid: String,
         shotIndex: Int,
         result: FireResult
     )
-
-    /**
-     * BUG 1 FIX — Turn switching.
-     *
-     * Writes [nextPlayerUid] to games/[gameId]/meta/currentTurn so that both
-     * devices' [OnlineGameState] observers see the updated turn and the correct
-     * player's board becomes interactive.
-     *
-     * Called by the DEFENDER immediately after resolving an incoming shot via
-     * [writeShotResult]. The defender becomes the next attacker, so we pass
-     * myUid (the defender's UID) as [nextPlayerUid].
-     */
     suspend fun flipTurn(gameId: String, nextPlayerUid: String): Result<Unit>
 }

@@ -35,20 +35,25 @@ fun OnlineBattleScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showResignDialog by remember { mutableStateOf(false) }
 
-    BackHandler {
-        showResignDialog = true
-    }
+    BackHandler { showResignDialog = true }
 
     LaunchedEffect(Unit) {
         viewModel.effects.collectLatest { effect ->
             when (effect) {
                 is OnlineGameViewModel.UiEffect.NavigateToGameOver -> {
                     try {
-                        navController.navigate(GameOverRoute(gameId = "", winner = effect.winner)) {
+                        navController.navigate(
+                            GameOverRoute(
+                                gameId = "", // Intentionally blank for online view suppression
+                                winner = effect.winner,
+                                totalShots = effect.totalShots,
+                                accuracy = effect.accuracy
+                            )
+                        ) {
                             popUpTo(MainMenuRoute) { inclusive = false }
                         }
                     } catch (e: Exception) {
-                        Timber.e(e, "OnlineBattleScreen: NavigateToGameOver failed — winner=${effect.winner}")
+                        Timber.e(e, "NavigateToGameOver failed")
                     }
                 }
                 is OnlineGameViewModel.UiEffect.ShowHitAnimation  -> { }
@@ -79,9 +84,7 @@ fun OnlineBattleScreen(
 
     if (uiState.gameStatus == OnlineGameViewModel.GameStatus.WAITING) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Brush.verticalGradient(listOf(NavySurface, NavyBackground))),
+            modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(NavySurface, NavyBackground))),
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -90,11 +93,6 @@ fun OnlineBattleScreen(
                     "Waiting for ${uiState.opponentName} to place ships…",
                     style = MaterialTheme.typography.bodyLarge,
                     color = MaterialTheme.colorScheme.onBackground,
-                )
-                Text(
-                    "Your fleet is ready for battle",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                 )
             }
         }
@@ -122,9 +120,6 @@ fun OnlineBattleScreen(
             )
         }
     ) { paddingValues ->
-        
-        // 3. FIXED LOGIC: Removed weight/mini restrictions. Standard scrollable column
-        // with two beautiful, full-sized grids so the game looks grand again.
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -133,42 +128,21 @@ fun OnlineBattleScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
         ) {
-            // Status info row
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    "vs ${uiState.opponentName}",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
+            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("vs ${uiState.opponentName}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onBackground)
                 if (!uiState.opponentConnected) {
-                    Text(
-                        "Opponent disconnected (${uiState.opponentDisconnectedSeconds}s)",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
+                    Text("Opponent disconnected (${uiState.opponentDisconnectedSeconds}s)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
                 }
             }
 
-            Text(
-                "ENEMY WATERS",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            Text("ENEMY WATERS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             Spacer(modifier = Modifier.height(8.dp))
 
-            val canFire = uiState.isMyTurn &&
-                    uiState.gameStatus == OnlineGameViewModel.GameStatus.BATTLE &&
-                    uiState.opponentConnected
-
+            val canFire = uiState.isMyTurn && uiState.gameStatus == OnlineGameViewModel.GameStatus.BATTLE && uiState.opponentConnected
             GameGrid(
                 board = uiState.opponentBoard,
                 showShips = false,
-                onCellTapped = if (canFire) { cell: CellViewState ->
-                    viewModel.onEvent(OnlineGameViewModel.UiEvent.CellTapped(cell.coord))
-                } else null,
+                onCellTapped = if (canFire) { cell: CellViewState -> viewModel.onEvent(OnlineGameViewModel.UiEvent.CellTapped(cell.coord)) } else null,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -176,11 +150,7 @@ fun OnlineBattleScreen(
             HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
             Spacer(Modifier.height(32.dp))
 
-            Text(
-                "YOUR FLEET",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            Text("YOUR FLEET", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.height(8.dp))
             
             GameGrid(
@@ -189,7 +159,6 @@ fun OnlineBattleScreen(
                 onCellTapped = null,
                 modifier = Modifier.fillMaxWidth()
             )
-            
             Spacer(Modifier.height(32.dp))
         }
     }

@@ -1,3 +1,4 @@
+// FILE: core/ui/src/main/kotlin/com/battleship/fleetcommand/navigation/Routes.kt
 package com.battleship.fleetcommand.navigation
 
 import kotlinx.serialization.Serializable
@@ -32,11 +33,18 @@ import kotlinx.serialization.Serializable
     val isP1HandOff: Boolean = false,
     val phase: String = "SETUP",
 )
-@Serializable data class GameOverRoute(val gameId: String, val winner: String)
+
+@Serializable data class GameOverRoute(
+    val gameId: String, 
+    val winner: String,
+    val totalShots: Int = 0, // Added to pass online match stats directly
+    val accuracy: Int = 0    // Added to pass online match stats directly
+)
+
 @Serializable object OnlineLobbyRoute
 @Serializable data class WaitingForOpponentRoute(
     val gameId: String,
-    val roomCode: String = "",   // added — host shares this with opponent
+    val roomCode: String = "",
 )
 @Serializable object StatisticsRoute
 @Serializable object SettingsRoute
