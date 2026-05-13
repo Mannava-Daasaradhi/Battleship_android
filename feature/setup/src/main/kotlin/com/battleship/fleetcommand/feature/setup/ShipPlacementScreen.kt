@@ -140,7 +140,7 @@ fun ShipPlacementScreen(
                         navController.navigate(
                             OnlineBattleRoute(gameId = effect.gameId, myUid = effect.myUid)
                         ) {
-                            popUpTo(MainMenuRoute) { inclusive = false }
+                            popUpTo<MainMenuRoute> { inclusive = false }
                         }
                     } catch (e: Exception) {
                         Timber.e(e, "ShipPlacementScreen: NavigateToOnlineBattle failed — retrying without popUpTo")
