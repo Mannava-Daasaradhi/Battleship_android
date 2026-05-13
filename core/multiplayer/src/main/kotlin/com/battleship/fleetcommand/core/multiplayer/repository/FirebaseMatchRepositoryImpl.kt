@@ -190,8 +190,14 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
     }
 
     // ── observeOpponentShots ──────────────────────────────────────────────────
-    // Listens to shots/ node; accumulates and emits List<ShotData> whenever a
-    // new shot from the opponent arrives (onChildAdded per shooter uid node).
+    // Listens to the shots/ node. Emits a flat List<ShotData> of ALL opponent shots
+    // whenever any new shot arrives or an existing shot's result is written.
+    //
+    // BUG 1 FIX: The original onChildChanged handler called accumulated.removeAll { true }
+    // and rebuilt only from the changed shooter's snapshot. This wiped shots from any
+    // other shooter already in accumulated. The fix: keep a per-shooter map and rebuild
+    // the flat list from the full map on every change, so shots from other shooters are
+    // never lost.
     override fun observeOpponentShots(gameId: String): Flow<List<ShotData>> = callbackFlow {
         val myUid = authManager.currentUid ?: run {
             close(IllegalStateException("Not authenticated"))
@@ -201,29 +207,28 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
             "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.SHOTS}"
         )
 
-        val accumulated = mutableListOf<ShotData>()
+        // Per-shooter shot list. Key = shooterUid, value = all shots from that shooter.
+        // Using a map means onChildChanged only replaces the affected shooter's list,
+        // preserving shots from all other shooters.
+        val shotsByShooter = mutableMapOf<String, List<ShotData>>()
 
         val listener = object : ChildEventListener {
             override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) {
                 val shooterUid = snapshot.key ?: return
                 if (shooterUid == myUid) return
-                snapshot.children.forEach { shotSnapshot ->
-                    val shot = mapper.mapShotSnapshot(shotSnapshot)
-                    if (shot != null) accumulated.add(shot)
-                }
-                trySend(accumulated.toList())
+                val shots = snapshot.children.mapNotNull { mapper.mapShotSnapshot(it) }
+                shotsByShooter[shooterUid] = shots
+                trySend(shotsByShooter.values.flatten())
             }
 
             override fun onChildChanged(snapshot: DataSnapshot, previousChildName: String?) {
                 val shooterUid = snapshot.key ?: return
                 if (shooterUid == myUid) return
-                // Rebuild this shooter's shots from scratch to pick up result writes
-                accumulated.removeAll { true } // clear and re-add from snapshot
-                snapshot.children.forEach { shotSnapshot ->
-                    val shot = mapper.mapShotSnapshot(shotSnapshot)
-                    if (shot != null) accumulated.add(shot)
-                }
-                trySend(accumulated.toList())
+                // BUG 1 FIX: Rebuild only this shooter's list from the updated snapshot.
+                // All other shooters' shots remain intact in the map.
+                val shots = snapshot.children.mapNotNull { mapper.mapShotSnapshot(it) }
+                shotsByShooter[shooterUid] = shots
+                trySend(shotsByShooter.values.flatten())
             }
 
             override fun onCancelled(error: DatabaseError) {
@@ -303,7 +308,7 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
     }
 
     // ── flipTurn ──────────────────────────────────────────────────────────────
-    // BUG 1 FIX — writes nextPlayerUid to games/$gameId/meta/currentTurn.
+    // Writes nextPlayerUid to games/$gameId/meta/currentTurn.
     // Called by the DEFENDER after resolving each incoming shot so the turn
     // switches to the defender (who now becomes the attacker).
     override suspend fun flipTurn(gameId: String, nextPlayerUid: String): Result<Unit> {
