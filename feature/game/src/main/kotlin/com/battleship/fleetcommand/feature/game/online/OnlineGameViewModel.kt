@@ -60,6 +60,7 @@ class OnlineGameViewModel @Inject constructor(
         val gameId: String = "",
         val myUid: String = "",
         val isMyTurn: Boolean = false,
+        val isAnimating: Boolean = false,
         val myBoard: BoardViewState = BoardViewState.empty(),
         val opponentBoard: BoardViewState = BoardViewState.empty(),
         val connectionStatus: ConnectionStatus = ConnectionStatus.CONNECTED,
@@ -104,17 +105,8 @@ class OnlineGameViewModel @Inject constructor(
 
     private var myPlacements: List<ShipPlacement> = emptyList()
 
-    // Track which opponent shots have already been resolved to avoid double-processing
     private val resolvedShotKeys = mutableSetOf<String>()
-
-    // Track opponent UID once we know it (from game state)
     private var opponentUid: String = ""
-
-    // Guard against duplicate NavigateToGameOver emissions.
-    // Firebase may fire the winner update multiple times (on reconnect / resubscribe) and
-    // each call to handleGameStateUpdate() would emit NavigateToGameOver again, causing
-    // the second navController.navigate() to crash on an inconsistent back stack.
-    // This flag is set on the first emission and blocks all subsequent ones.
     private var navigatedToGameOver = false
 
     // ── Init ───────────────────────────────────────────────────────────────────
@@ -135,38 +127,23 @@ class OnlineGameViewModel @Inject constructor(
         }
     }
 
-    // ── Load my placements from Room ──────────────────────────────────────────
-    //
-    // PlacementViewModel.confirmPlacement() (ONLINE branch) saves the board to Room
-    // via gameRepository.saveBoardState(firebaseGameId, PlayerSlot.ONE, placements)
-    // BEFORE emitting NavigateToOnlineBattle. However, Room writes are dispatched on
-    // the IO dispatcher and Jetpack Navigation composable instantiation happens very
-    // quickly — there is a small race window where this ViewModel's init() fires before
-    // the Room transaction is fully committed.
-    //
-    // Fix: retry up to LOAD_MAX_RETRIES times with LOAD_RETRY_DELAY_MS between each
-    // attempt. In practice the data is always available by retry 1 or 2.
     private fun loadMyPlacements() {
         viewModelScope.launch {
             try {
                 var placements: List<ShipPlacement>? = null
                 repeat(LOAD_MAX_RETRIES) { attempt ->
-                    if (placements != null) return@repeat   // already found
+                    if (placements != null) return@repeat
                     val loaded = gameRepository.getBoardState(gameId, PlayerSlot.ONE)
                     if (!loaded.isNullOrEmpty()) {
                         placements = loaded
                     } else if (attempt < LOAD_MAX_RETRIES - 1) {
-                        Timber.w("OnlineGameViewModel: loadMyPlacements attempt ${attempt + 1} returned empty — retrying in ${LOAD_RETRY_DELAY_MS}ms")
                         delay(LOAD_RETRY_DELAY_MS)
                     }
                 }
 
                 if (!placements.isNullOrEmpty()) {
                     myPlacements = placements!!
-                    Timber.d("OnlineGameViewModel: loadMyPlacements loaded ${placements!!.size} ships for gameId=$gameId")
                     _uiState.update { it.copy(myBoard = buildMyBoardFromPlacements(placements!!)) }
-                } else {
-                    Timber.e("OnlineGameViewModel: loadMyPlacements — no board state found after $LOAD_MAX_RETRIES retries for gameId=$gameId")
                 }
             } catch (e: Exception) {
                 Timber.e(e, "OnlineGameViewModel: loadMyPlacements failed")
@@ -186,7 +163,6 @@ class OnlineGameViewModel @Inject constructor(
         return BoardViewState(cells = cellViews, ownShips = shipViews)
     }
 
-    // ── Game state observer ────────────────────────────────────────────────────
     private fun startObservingGame() {
         gameObserverJob?.cancel()
         gameObserverJob = viewModelScope.launch {
@@ -224,6 +200,8 @@ class OnlineGameViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 isMyTurn          = isMyTurn,
+                // Unlock rapid-fire block if my turn is restored
+                isAnimating       = if (isMyTurn) false else it.isAnimating,
                 opponentName      = opponentName,
                 opponentConnected = opponentConn,
                 gameStatus        = newStatus,
@@ -233,11 +211,19 @@ class OnlineGameViewModel @Inject constructor(
             )
         }
 
-        // Only emit NavigateToGameOver once per game.
-        // Firebase fires the winner update on every reconnect / resubscribe, so this
-        // handler is called multiple times with status=="finished". Without the guard,
-        // each call would push a new GameOverRoute onto the back stack and the second
-        // navController.navigate() crashes with IllegalStateException.
+        // Check WIN CONDITION: If we have landed 17 hits, the opponent is defeated.
+        val myTotalHits = state.myShots.count { 
+            it.result == FireResult.HIT || it.result == FireResult.SUNK 
+        }
+
+        if (myTotalHits == 17 && state.status != "finished") {
+            viewModelScope.launch { repository.claimVictory(gameId) }
+            if (!navigatedToGameOver) {
+                navigatedToGameOver = true
+                viewModelScope.launch { _effects.send(UiEffect.NavigateToGameOver("You")) }
+            }
+        }
+
         val winner = state.winner ?: ""
         if (winner.isNotEmpty() && newStatus == GameStatus.FINISHED && !navigatedToGameOver) {
             navigatedToGameOver = true
@@ -247,8 +233,6 @@ class OnlineGameViewModel @Inject constructor(
             }
         }
     }
-
-    // ── Build board views from Firebase state ──────────────────────────────────
 
     private fun buildMyBoard(state: OnlineGameState): BoardViewState {
         val cells = Array(GameConstants.TOTAL_CELLS) { CellDisplayState.WATER }
@@ -294,7 +278,6 @@ class OnlineGameViewModel @Inject constructor(
         return BoardViewState(cells = cellViews)
     }
 
-    // ── Opponent shot observer ─────────────────────────────────────────────────
     private fun startObservingOpponentShots() {
         opponentShotJob?.cancel()
         opponentShotJob = viewModelScope.launch {
@@ -350,24 +333,26 @@ class OnlineGameViewModel @Inject constructor(
         }
     }
 
-    // ── Cell tapped (fire shot) ────────────────────────────────────────────────
     private fun handleCellTapped(coord: Coord) {
-        if (!_uiState.value.isMyTurn) return
+        // Prevent rapid-firing by returning early if we are animating a shot
+        if (!_uiState.value.isMyTurn || _uiState.value.isAnimating) return
         if (_uiState.value.gameStatus != GameStatus.BATTLE) return
+        
+        // Immediately lock input until response completes
+        _uiState.update { it.copy(isMyTurn = false, isAnimating = true) }
+
         viewModelScope.launch {
             val result = repository.fireShot(gameId, coord)
             if (result.isFailure) {
                 Timber.e(result.exceptionOrNull(), "OnlineGameViewModel: fireShot failed")
+                _uiState.update { it.copy(isMyTurn = true, isAnimating = false) } // Restore turn on failure
             } else {
                 hapticManager.perform(HapticEvent.SHOT_FIRED)
             }
         }
     }
 
-    // ── Resign ─────────────────────────────────────────────────────────────────
     private fun handleResign() {
-        // Guard resign navigation so it cannot fire after the game-over observer has
-        // already navigated away (e.g., back-press races with Firebase update).
         if (navigatedToGameOver) return
         navigatedToGameOver = true
         viewModelScope.launch {
@@ -375,21 +360,16 @@ class OnlineGameViewModel @Inject constructor(
         }
     }
 
-    // ── Claim victory after disconnect ─────────────────────────────────────────
     private fun handleClaimVictory() {
         viewModelScope.launch {
             repository.claimVictory(gameId)
         }
     }
 
-    // ── Presence ───────────────────────────────────────────────────────────────
     private fun setPresence(connected: Boolean) {
-        viewModelScope.launch {
-            repository.setPresence(gameId, connected)
-        }
+        viewModelScope.launch { repository.setPresence(gameId, connected) }
     }
 
-    // ── Disconnect timer ───────────────────────────────────────────────────────
     private fun startDisconnectTimer() {
         disconnectTimerJob?.cancel()
         disconnectTimerJob = viewModelScope.launch {
@@ -412,7 +392,6 @@ class OnlineGameViewModel @Inject constructor(
         _uiState.update { it.copy(opponentDisconnectedSeconds = 0) }
     }
 
-    // ── Cleanup ────────────────────────────────────────────────────────────────
     override fun onCleared() {
         super.onCleared()
         gameObserverJob?.cancel()
@@ -422,11 +401,6 @@ class OnlineGameViewModel @Inject constructor(
     }
 
     companion object {
-        // Retry configuration for loadMyPlacements().
-        // PlacementViewModel saves to Room on the IO dispatcher immediately before
-        // emitting NavigateToOnlineBattle. Navigation is fast enough that this
-        // ViewModel's init() may fire before Room commits. 5 retries × 300ms = 1.5s
-        // maximum wait — imperceptible to the player on the waiting screen.
         private const val LOAD_MAX_RETRIES     = 5
         private const val LOAD_RETRY_DELAY_MS  = 300L
     }

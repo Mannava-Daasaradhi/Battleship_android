@@ -21,30 +21,16 @@ import com.battleship.fleetcommand.core.ui.model.CellViewState
 import com.battleship.fleetcommand.core.ui.theme.NavyBackground
 import com.battleship.fleetcommand.core.ui.theme.NavySurface
 import com.battleship.fleetcommand.navigation.GameOverRoute
-import com.battleship.fleetcommand.navigation.OnlineBattleRoute
+import com.battleship.fleetcommand.navigation.MainMenuRoute
 import kotlinx.coroutines.flow.collectLatest
 import timber.log.Timber
 
-/**
- * Online battle screen — wired to [OnlineGameViewModel] which uses Firebase Realtime DB.
- * Separate from BattleScreen (which uses local Room / AI) to keep concerns isolated.
- * Section 6 — Online Multiplayer.
- *
- * BUG 2 FIX: Navigation to GameOverRoute is wrapped in try/catch so a crash in
- * navController.navigate() (e.g. back-stack already popped) never kills the process.
- *
- * BUG 4 FIX: The inner Column is wrapped in verticalScroll() and GameGrid calls use
- * no weight(1f) modifier — GameGrid now uses a plain Column+Row layout that reports
- * full intrinsic height, so both grids are always fully visible and scrollable on
- * any screen size. The outer Column still uses fillMaxSize() so the gradient fills
- * the screen, and verticalScroll() provides overflow access on small screens.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OnlineBattleScreen(
     navController: NavController,
     viewModel: OnlineGameViewModel,
-    route: OnlineBattleRoute,
+    route: com.battleship.fleetcommand.navigation.OnlineBattleRoute,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showResignDialog by remember { mutableStateOf(false) }
@@ -53,30 +39,23 @@ fun OnlineBattleScreen(
         showResignDialog = true
     }
 
-    // Consume one-shot effects
     LaunchedEffect(Unit) {
         viewModel.effects.collectLatest { effect ->
             when (effect) {
                 is OnlineGameViewModel.UiEffect.NavigateToGameOver -> {
-                    // BUG 2 FIX: wrap in try/catch — a navigation crash (e.g. Activity
-                    // destroyed, back stack inconsistent) must never kill the process.
-                    // OnlineGameViewModel already guards against duplicate emissions via
-                    // navigatedToGameOver, but the try/catch is a second safety net.
                     try {
                         navController.navigate(GameOverRoute(gameId = "", winner = effect.winner)) {
-                            popUpTo(com.battleship.fleetcommand.navigation.MainMenuRoute) { inclusive = false }
+                            popUpTo(MainMenuRoute) { inclusive = false }
                         }
                     } catch (e: Exception) {
                         Timber.e(e, "OnlineBattleScreen: NavigateToGameOver failed — winner=${effect.winner}")
                     }
                 }
-                is OnlineGameViewModel.UiEffect.ShowHitAnimation  -> { /* future animation */ }
-                is OnlineGameViewModel.UiEffect.ShowMissAnimation -> { /* future animation */ }
-                is OnlineGameViewModel.UiEffect.ShowSunkAnimation -> { /* future animation */ }
-                is OnlineGameViewModel.UiEffect.ShowReconnectingOverlay -> { /* future overlay */ }
-                is OnlineGameViewModel.UiEffect.ShowOpponentDisconnectedDialog -> {
-                    // TODO: show dialog offering to claim victory
-                }
+                is OnlineGameViewModel.UiEffect.ShowHitAnimation  -> { }
+                is OnlineGameViewModel.UiEffect.ShowMissAnimation -> { }
+                is OnlineGameViewModel.UiEffect.ShowSunkAnimation -> { }
+                is OnlineGameViewModel.UiEffect.ShowReconnectingOverlay -> { }
+                is OnlineGameViewModel.UiEffect.ShowOpponentDisconnectedDialog -> { }
             }
         }
     }
@@ -98,7 +77,6 @@ fun OnlineBattleScreen(
         )
     }
 
-    // Waiting for battle to start (still in "setup" status — opponent hasn't placed ships yet)
     if (uiState.gameStatus == OnlineGameViewModel.GameStatus.WAITING) {
         Box(
             modifier = Modifier
@@ -144,23 +122,20 @@ fun OnlineBattleScreen(
             )
         }
     ) { paddingValues ->
-        // BUG 4 FIX: verticalScroll() ensures both grids are reachable on any screen size.
-        // GameGrid no longer uses LazyVerticalGrid (see GameGrid.kt fix), so it reports
-        // its full intrinsic height correctly. weight(1f) is removed — it was fighting
-        // intrinsic height measurement and is not needed with the non-lazy grid.
-        // fillMaxSize() is kept so the gradient background fills the full screen.
+        
+        // 3. FIXED LOGIC: Removed weight/mini restrictions. Standard scrollable column
+        // with two beautiful, full-sized grids so the game looks grand again.
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Brush.verticalGradient(listOf(NavySurface, NavyBackground)))
                 .padding(paddingValues)
-                .padding(horizontal = 8.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
         ) {
             // Status info row
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
@@ -182,42 +157,40 @@ fun OnlineBattleScreen(
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Opponent board — tappable only on my turn during battle
             val canFire = uiState.isMyTurn &&
                     uiState.gameStatus == OnlineGameViewModel.GameStatus.BATTLE &&
                     uiState.opponentConnected
 
-            // BUG 4 FIX: weight(1f) removed — GameGrid now uses Column+Row internally
-            // and reports full intrinsic height. verticalScroll on the parent Column
-            // handles overflow so both grids are always fully reachable.
             GameGrid(
                 board = uiState.opponentBoard,
                 showShips = false,
                 onCellTapped = if (canFire) { cell: CellViewState ->
                     viewModel.onEvent(OnlineGameViewModel.UiEvent.CellTapped(cell.coord))
                 } else null,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth()
             )
 
-            HorizontalDivider()
+            Spacer(Modifier.height(32.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+            Spacer(Modifier.height(32.dp))
 
             Text(
                 "YOUR FLEET",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.primary,
             )
-
-            // BUG 4 FIX: weight(1f) removed — same reason as above.
+            Spacer(Modifier.height(8.dp))
+            
             GameGrid(
                 board = uiState.myBoard,
                 showShips = true,
                 onCellTapped = null,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth()
             )
-
-            // Bottom spacer so the last grid has breathing room when scrolled to end
-            Spacer(modifier = Modifier.height(16.dp))
+            
+            Spacer(Modifier.height(32.dp))
         }
     }
 }

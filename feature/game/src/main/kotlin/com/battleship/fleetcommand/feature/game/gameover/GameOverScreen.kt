@@ -32,7 +32,6 @@ import kotlinx.coroutines.flow.collectLatest
 
 // ADS PLACEHOLDER — owner will integrate AdMob interstitial here in a future update
 
-// OnlineGreen inline — avoids dependency on a specific core:ui color token name
 private val OnlineGreen = Color(0xFF4CAF50)
 
 @Composable
@@ -43,7 +42,6 @@ fun GameOverScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Section 12: Back → Main Menu (not back to battle)
     BackHandler {
         viewModel.onEvent(GameOverViewModel.UiEvent.MainMenu)
     }
@@ -56,14 +54,11 @@ fun GameOverScreen(
                 GameOverViewModel.UiEffect.NavigateToStatistics ->
                     navController.navigate(StatisticsRoute)
                 GameOverViewModel.UiEffect.NavigateToModeSelect ->
-                    // inclusive is false by default — do NOT set it explicitly (private setter)
                     navController.navigate(ModeSelectRoute) { popUpTo(MainMenuRoute) }
             }
         }
     }
 
-    // Section 9: GameOver enter transition — scale 0.8→1.0 + alpha (handled in NavHost)
-    // Internal result card also springs in
     var revealed by remember { mutableStateOf(false) }
     val cardScale by animateFloatAsState(
         targetValue = if (revealed) 1f else 0.8f,
@@ -90,7 +85,6 @@ fun GameOverScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    // Result card — springs in per Section 9
                     Surface(
                         shape = MaterialTheme.shapes.medium,
                         color = MaterialTheme.colorScheme.surface,
@@ -120,48 +114,53 @@ fun GameOverScreen(
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                                 textAlign = TextAlign.Center,
                             )
-                            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly,
-                            ) {
-                                StatChip("Shots", uiState.totalShots.toString())
-                                StatChip("Accuracy", "${uiState.accuracy}%")
+                            
+                            // 2. FIXED LOGIC: Only show stats if they exist (hides 0s for online games)
+                            if (uiState.totalShots > 0) {
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly,
+                                ) {
+                                    StatChip("Shots", uiState.totalShots.toString())
+                                    StatChip("Accuracy", "${uiState.accuracy}%")
+                                }
                             }
                         }
                     }
 
-                    // Both boards revealed side by side per Section task spec
-                    Text(
-                        "BATTLE REPORT",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("YOUR FLEET", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onBackground)
-                            GameGrid(
-                                board = uiState.myBoard,
-                                showShips = true,
-                                onCellTapped = null,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("ENEMY FLEET", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onBackground)
-                            GameGrid(
-                                board = uiState.opponentBoard,
-                                showShips = true,
-                                onCellTapped = null,
-                                modifier = Modifier.fillMaxWidth(),
-                            )
+                    // 2. FIXED LOGIC: Only show boards if we successfully loaded them
+                    if (uiState.myBoard.cells.isNotEmpty()) {
+                        Text(
+                            "BATTLE REPORT",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("YOUR FLEET", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onBackground)
+                                GameGrid(
+                                    board = uiState.myBoard,
+                                    showShips = true,
+                                    onCellTapped = null,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                            Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("ENEMY FLEET", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onBackground)
+                                GameGrid(
+                                    board = uiState.opponentBoard,
+                                    showShips = true,
+                                    onCellTapped = null,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
                         }
                     }
 
-                    // Actions
                     BattleshipButton(
                         text = "PLAY AGAIN",
                         onClick = { viewModel.onEvent(GameOverViewModel.UiEvent.PlayAgain) },

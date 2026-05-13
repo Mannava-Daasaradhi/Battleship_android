@@ -79,32 +79,26 @@ class GameOverViewModel @Inject constructor(
     private suspend fun loadGameResult() {
         val gameId = route.gameId
         val winner = route.winner
+        val isOnlineGame = gameId.isBlank()
 
-        // Determine if the local player won:
-        //   - Online games pass "You" for local win, opponent name for loss.
-        //   - AI games pass "AI" for AI win, "Player" for player win.
-        //   - Local pass-and-play passes the player name who won.
-        // So: "You" or anything that isn't "AI" and isn't blank is a player win.
-        // For online specifically we pass "You" when the local player wins.
+        // 1. FIXED LOGIC: Correctly determine online defeat vs local pass-and-play victory
         val isPlayerWin = when {
-            winner == "You"   -> true    // online: local player won
-            winner == "AI"    -> false   // single player: AI won
-            winner.isBlank()  -> false   // safety: no winner string
-            else              -> true    // single/local: player name = win
+            winner == "You" -> true                     // Online: local player won
+            isOnlineGame && winner != "You" -> false    // Online: opponent won
+            winner == "AI" -> false                     // Single player: AI won
+            winner.isBlank() -> false                   // Safety: no winner string
+            else -> true                                // Local Pass & Play: player name = win
         }
 
         _uiState.update { it.copy(winner = winner, isPlayerWin = isPlayerWin) }
 
-        // If no local gameId (online game), or blank → skip Room DB query.
-        // Online game boards are in Firebase; we cannot retrieve them from Room.
-        // The result card still shows VICTORY/DEFEATED with the winner name.
-        if (gameId.isBlank()) {
+        // If no local gameId (online game), skip DB query. 
+        // We will gracefully hide the stats section in the UI since it's in Firebase.
+        if (isOnlineGame) {
             _uiState.update { it.copy(isLoading = false) }
             return
         }
 
-        // Wrap all DB access in try/catch — a Room exception (migration gap, missing row, etc.)
-        // must NEVER crash the process. Worst case we show the result card without board details.
         try {
             val myPlacements = gameRepository.getBoardState(gameId, PlayerSlot.ONE) ?: emptyList()
             val aiPlacements = gameRepository.getBoardState(gameId, PlayerSlot.TWO) ?: emptyList()
@@ -132,7 +126,6 @@ class GameOverViewModel @Inject constructor(
                 )
             }
         } catch (e: Exception) {
-            // DB read failed — still dismiss the loading spinner so the result card is shown
             _uiState.update { it.copy(isLoading = false) }
         }
     }
@@ -150,7 +143,6 @@ class GameOverViewModel @Inject constructor(
     private fun buildRevealedBoard(placements: List<ShipPlacement>, shots: Set<Coord>): BoardViewState {
         val sunkIds = placements.filter { p -> p.occupiedCoords().all { it in shots } }.map { it.shipId }.toSet()
         val cells = Array(GameConstants.TOTAL_CELLS) { CellDisplayState.WATER }
-        // Show all ships (revealed board)
         for (p in placements) {
             for (c in p.occupiedCoords()) {
                 if (c.isValid()) cells[c.index] = when {
@@ -159,7 +151,6 @@ class GameOverViewModel @Inject constructor(
                 }
             }
         }
-        // Overlay shots
         for (shot in shots) {
             if (!shot.isValid()) continue
             val hit = placements.any { shot in it.occupiedCoords() }
