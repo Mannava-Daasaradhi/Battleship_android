@@ -221,6 +221,35 @@ class FakeFirebaseDatabase : FirebaseMatchRepository {
         return Result.success(Unit)
     }
 
+    /**
+     * Atomically writes result + shipId + turn flip in a SINGLE state-flow emission.
+     * Mirrors [FirebaseMatchRepositoryImpl.commitShotAndFlipTurn].
+     *
+     * In the real impl this is a single Firebase updateChildren() call.
+     * In the fake we replicate the atomicity by updating all fields before
+     * emitting on the StateFlow so test observers never see a partial state.
+     */
+    override suspend fun commitShotAndFlipTurn(
+        gameId: String,
+        shooterUid: String,
+        shotIndex: Int,
+        result: FireResult,
+        shipId: String?,
+        nextTurnUid: String,
+    ): Result<Unit> {
+        val node = games[gameId]
+            ?: return Result.failure(Exception("commitShotAndFlipTurn: game not found: $gameId"))
+        val shot = node.shots[shooterUid]?.getOrNull(shotIndex)
+            ?: return Result.failure(Exception("commitShotAndFlipTurn: shot not found at index $shotIndex"))
+        // Write all three fields before emitting — single observer event, no partial state
+        shot.result      = result
+        shot.shipId      = shipId
+        node.currentTurn = nextTurnUid
+        stateFlows[gameId]?.value = node
+        return Result.success(Unit)
+    }
+
+
     // ── Test helpers ──────────────────────────────────────────────────────────
 
     /** Injects a shot from the opponent into the game; triggers [observeOpponentShots]. */

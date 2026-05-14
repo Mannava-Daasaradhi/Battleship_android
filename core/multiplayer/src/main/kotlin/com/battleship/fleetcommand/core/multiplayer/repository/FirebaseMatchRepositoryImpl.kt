@@ -217,12 +217,8 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Writes the resolved result (and optional shipId) for a shot the opponent fired.
-     *
-     * Per the Firebase security rules, only the non-shooter (the defender) may write
-     * the `result` field — the rules enforce `auth.uid !== $shooterUid` on that path.
-     * The [shipId] is written to the same push-key node so the attacker can reconstruct
-     * which cells belong to a sunk ship and render them in orange (SUNK state).
+     * Legacy single-field write. Kept to satisfy the interface contract and for test
+     * compatibility. In production the VM calls [commitShotAndFlipTurn] instead.
      */
     override suspend fun writeShotResult(
         gameId: String,
@@ -238,11 +234,76 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
 
             val shotNode = shotsRef.child(pushKey)
             shotNode.child(FirebaseSchema.SHOT_RESULT).setValue(result.toSchemaString()).await()
-            // Write shipId for HIT and SUNK so attacker can colour sunk cells correctly.
-            // For MISS this is null and we still write it to clear any stale value.
             shotNode.child(FirebaseSchema.SHOT_SHIP_ID).setValue(shipId).await()
         } catch (e: Exception) {
             Timber.w(e, "writeShotResult failed for game=$gameId shooter=$shooterUid index=$shotIndex")
+        }
+    }
+
+    /**
+     * Atomically writes the shot result + shipId AND flips currentTurn in a SINGLE
+     * Firebase multi-path updateChildren() call.
+     *
+     * Why this matters:
+     * The old pattern was writeShotResult() + flipTurn() — two separate .await() calls.
+     * Firebase's ValueEventListener fires after EACH write, so both devices saw a
+     * partial intermediate state between the two writes:
+     *   - After write 1 (result written): shot shows resolved, but turn not yet flipped.
+     *     Attacker's board briefly thought it was still their turn (lag/bug).
+     *     Attacker's buildOpponentBoard ran with shipId=null → sunk cells stayed red.
+     *   - After write 2 (shipId written): board re-rendered with correct shipId.
+     *     But the damage is done — the intermediate render caused visible jank.
+     *
+     * updateChildren() writes all paths in a single operation → single listener event
+     * → both boards rebuild once with complete, consistent data.
+     *
+     * Firebase path structure written:
+     *   games/{gameId}/shots/{shooterUid}/{pushKey}/result  = "hit"|"miss"|"sunk"
+     *   games/{gameId}/shots/{shooterUid}/{pushKey}/shipId  = "CARRIER"|null|etc.
+     *   games/{gameId}/meta/currentTurn                     = nextTurnUid
+     */
+    override suspend fun commitShotAndFlipTurn(
+        gameId: String,
+        shooterUid: String,
+        shotIndex: Int,
+        result: FireResult,
+        shipId: String?,
+        nextTurnUid: String,
+    ): Result<Unit> {
+        return try {
+            // Resolve the push-key for this shot by index.
+            // Firebase uses push-keys (chronological), so elementAtOrNull by index is correct.
+            val shotsRef = database.getReference(
+                "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.SHOTS}/$shooterUid"
+            )
+            val snapshot = shotsRef.get().await()
+            val pushKey = snapshot.children.elementAtOrNull(shotIndex)?.key
+                ?: return Result.failure(Exception("Shot push-key not found at index $shotIndex"))
+
+            // Build a single multi-path update map.
+            // Keys are RELATIVE to the game root (/games/{gameId}).
+            val gameRootRef = database.getReference("${FirebaseSchema.GAMES}/$gameId")
+
+            val updates: Map<String, Any?> = buildMap {
+                put(
+                    "${FirebaseSchema.SHOTS}/$shooterUid/$pushKey/${FirebaseSchema.SHOT_RESULT}",
+                    result.toSchemaString()
+                )
+                put(
+                    "${FirebaseSchema.SHOTS}/$shooterUid/$pushKey/${FirebaseSchema.SHOT_SHIP_ID}",
+                    shipId   // null is valid here — Firebase will write null (clearing stale values)
+                )
+                put(
+                    "${FirebaseSchema.META}/${FirebaseSchema.CURRENT_TURN}",
+                    nextTurnUid
+                )
+            }
+
+            gameRootRef.updateChildren(updates).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Timber.w(e, "commitShotAndFlipTurn failed game=$gameId shooter=$shooterUid index=$shotIndex")
+            Result.failure(e)
         }
     }
 

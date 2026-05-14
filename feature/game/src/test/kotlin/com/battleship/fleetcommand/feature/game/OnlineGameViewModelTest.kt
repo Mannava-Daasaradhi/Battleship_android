@@ -18,6 +18,7 @@ import com.battleship.fleetcommand.core.ui.haptic.HapticManager
 import com.battleship.fleetcommand.core.ui.model.CellDisplayState
 import com.battleship.fleetcommand.feature.game.online.OnlineGameViewModel
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -31,11 +32,13 @@ import org.junit.jupiter.api.extension.ExtendWith
 /**
  * Unit tests for [OnlineGameViewModel].
  *
- * Covers all three confirmed device bugs:
+ * Covers confirmed bugs and sunk-ship feature:
  *   Bug 1 — YOUR FLEET grid shows no ships (myPlacements never populated from Room)
  *   Bug 2 — Hits never register (fireShot resolves against emptyList → always MISS)
- *   Bug 3 — Row 10 clipped (Compose layout fix in OnlineBattleScreen; data layer
- *            verified here: both boards always have exactly 100 cells with no gaps)
+ *   Bug 3 — Row 10 clipped (Compose layout fix; data layer verified here: both boards
+ *            always have exactly 100 cells with no gaps)
+ *   Feature — Sunk ship detection: SUNK cells turn orange on both boards;
+ *              haptic fires once per sunk event for both attacker and defender.
  *
  * Test infrastructure (pure JVM — zero Android context):
  *   [FakeGameRepository]   — in-memory Room substitute
@@ -80,15 +83,9 @@ class OnlineGameViewModelTest {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /**
-     * Builds a [SavedStateHandle] pre-populated with the keys that
-     * [OnlineGameViewModel] reads via `savedStateHandle.toRoute<OnlineBattleRoute>()`.
-     * Navigation serialises @Serializable route args by property name.
-     */
     private fun savedState(gameId: String, uid: String = myUid): SavedStateHandle =
         SavedStateHandle(mapOf("gameId" to gameId, "myUid" to uid))
 
-    /** Creates the VM wired to the current fakes. */
     private fun buildVm(gameId: String, uid: String = myUid): OnlineGameViewModel =
         OnlineGameViewModel(
             repository       = fakeFirebase,
@@ -98,15 +95,6 @@ class OnlineGameViewModelTest {
             hapticManager    = haptic,
         )
 
-    /**
-     * Full end-to-end game setup:
-     * 1. Host creates game → real gameId assigned by the fake.
-     * 2. Guest joins.
-     * 3. Both submit placements → status advances to "battle".
-     * 4. MY placements written to Room (mirrors PlacementViewModel Part A fix).
-     *
-     * Returns Pair(createdGameId, host ViewModel ready for assertions).
-     */
     private suspend fun setupBattleGame(): Pair<String, OnlineGameViewModel> {
         fakeFirebase.myUid = myUid
         var createdGameId = ""
@@ -115,17 +103,14 @@ class OnlineGameViewModelTest {
         }
         check(createdGameId.isNotBlank()) { "createGame returned blank id" }
 
-        // Guest joins (dummy room code accepted by fake)
         fakeFirebase.myUid = opUid
         fakeFirebase.joinGame("DUMMY", "Opponent").collect { /* consume */ }
 
-        // Both submit — fake advances status to "battle" once both are ready
         fakeFirebase.myUid = myUid
         fakeFirebase.submitShipPlacement(createdGameId, fullFleet)
         fakeFirebase.myUid = opUid
         fakeFirebase.submitShipPlacement(createdGameId, fullFleet)
 
-        // Part A fix: PlacementViewModel saves to Room before navigating
         fakeRoom.saveBoardState(createdGameId, PlayerSlot.ONE, fullFleet)
 
         fakeFirebase.myUid = myUid
@@ -135,11 +120,6 @@ class OnlineGameViewModelTest {
 
     // =========================================================================
     // BUG 1 — YOUR FLEET grid shows no ships
-    //
-    // Root cause: myPlacements stayed emptyList() — no GameRepository injection,
-    //             no loadMyPlacements() call in init{}.
-    // Fix (Part B): inject GameRepository; init{} calls loadMyPlacements() which
-    //               reads the state that PlacementViewModel wrote (Part A).
     // =========================================================================
 
     @Nested
@@ -149,14 +129,13 @@ class OnlineGameViewModelTest {
         fun `myBoard shows SHIP cells when Room has fleet saved before VM init`() = runTest {
             fakeRoom.saveBoardState("game-1", PlayerSlot.ONE, fullFleet)
             val vm = buildVm("game-1")
-            advanceUntilIdle()   // let loadMyPlacements() coroutine complete
+            advanceUntilIdle()
 
             val shipCells = vm.uiState.value.myBoard.cells
                 .filter { it.state == CellDisplayState.SHIP }
 
             assertTrue(shipCells.isNotEmpty(),
-                "Expected SHIP cells in myBoard but found none. " +
-                "loadMyPlacements() is not populating myPlacements from Room.")
+                "Expected SHIP cells in myBoard but found none.")
         }
 
         @Test
@@ -169,13 +148,11 @@ class OnlineGameViewModelTest {
                 .count { it.state == CellDisplayState.SHIP }
 
             assertEquals(17, count,
-                "Carrier(5)+Battleship(4)+Cruiser(3)+Submarine(3)+Destroyer(2)=17. " +
-                "Got $count — 0 means Bug 1 is still present.")
+                "Carrier(5)+Battleship(4)+Cruiser(3)+Submarine(3)+Destroyer(2)=17. Got $count")
         }
 
         @Test
         fun `myBoard is all WATER when Room has no saved placements`() = runTest {
-            // No saveBoardState call — confirms graceful empty-state handling
             val vm = buildVm("game-no-fleet")
             advanceUntilIdle()
 
@@ -201,7 +178,6 @@ class OnlineGameViewModelTest {
 
         @Test
         fun `PlayerSlot TWO placements are NOT loaded into myBoard (slot isolation)`() = runTest {
-            // VM always reads PlayerSlot.ONE — TWO placements must be invisible to it
             fakeRoom.saveBoardState("game-1", PlayerSlot.TWO, fullFleet)
             val vm = buildVm("game-1")
             advanceUntilIdle()
@@ -215,11 +191,9 @@ class OnlineGameViewModelTest {
 
         @Test
         fun `latest write wins when saveBoardState called twice with same gameId`() = runTest {
-            // First (stale) call
             fakeRoom.saveBoardState("game-1", PlayerSlot.ONE, listOf(
                 ShipPlacement(ShipId.DESTROYER, Coord.fromRowCol(9, 8), Orientation.Horizontal)
             ))
-            // Second (final) call — full fleet
             fakeRoom.saveBoardState("game-1", PlayerSlot.ONE, fullFleet)
 
             val vm = buildVm("game-1")
@@ -234,11 +208,6 @@ class OnlineGameViewModelTest {
 
     // =========================================================================
     // BUG 2 — Hits never register (every shot resolves as MISS)
-    //
-    // Root cause: direct consequence of Bug 1.
-    //   resolveNewOpponentShots() calls gameEngine.fireShot(coord, myPlacements, ...)
-    //   With myPlacements=emptyList() the engine has no ships → every shot is MISS.
-    // Fix: same as Bug 1. Populated myPlacements → engine resolves HIT/SUNK correctly.
     // =========================================================================
 
     @Nested
@@ -249,7 +218,6 @@ class OnlineGameViewModelTest {
             val (createdGameId, vm) = setupBattleGame()
             advanceUntilIdle()
 
-            // Carrier head is at (0,0)
             fakeFirebase.simulateOpponentShot(createdGameId, Coord.fromRowCol(0, 0))
             advanceUntilIdle()
 
@@ -258,8 +226,7 @@ class OnlineGameViewModelTest {
 
             assertTrue(
                 cell.state == CellDisplayState.HIT || cell.state == CellDisplayState.SUNK,
-                "Cell (0,0) is on the Carrier — expected HIT or SUNK. " +
-                "Got ${cell.state}. SHIP/WATER means myPlacements was empty (Bug 2)."
+                "Cell (0,0) is on the Carrier — expected HIT or SUNK. Got ${cell.state}."
             )
         }
 
@@ -301,10 +268,9 @@ class OnlineGameViewModelTest {
             val (createdGameId, vm) = setupBattleGame()
             advanceUntilIdle()
 
-            // Carrier occupies (0,0)–(0,4)
-            fakeFirebase.simulateOpponentShot(createdGameId, Coord.fromRowCol(0, 0)) // HIT
-            fakeFirebase.simulateOpponentShot(createdGameId, Coord.fromRowCol(0, 1)) // HIT
-            fakeFirebase.simulateOpponentShot(createdGameId, Coord.fromRowCol(9, 9)) // MISS
+            fakeFirebase.simulateOpponentShot(createdGameId, Coord.fromRowCol(0, 0))
+            fakeFirebase.simulateOpponentShot(createdGameId, Coord.fromRowCol(0, 1))
+            fakeFirebase.simulateOpponentShot(createdGameId, Coord.fromRowCol(9, 9))
             advanceUntilIdle()
 
             val board = vm.uiState.value.myBoard
@@ -319,13 +285,11 @@ class OnlineGameViewModelTest {
 
         @Test
         fun `engine root cause — fireShot on emptyList always returns Miss (documents Bug 2)`() {
-            // Not a VM test — documents WHY Bug 2 happened.
-            // GameEngine.fireShot with emptyList placements cannot match any ship.
             val engine = GameEngine()
             val outcome = engine.fireShot(
-                coord        = Coord.fromRowCol(0, 0), // would be a Carrier HIT with real fleet
-                placements   = emptyList(),             // the broken pre-fix state
-                shotHistory  = emptySet()
+                coord       = Coord.fromRowCol(0, 0),
+                placements  = emptyList(),
+                shotHistory = emptySet()
             ).getOrNull()
 
             assertTrue(outcome is ShotOutcome.Miss,
@@ -335,11 +299,6 @@ class OnlineGameViewModelTest {
 
     // =========================================================================
     // BUG 3 — Row 10 cut off on both grids
-    //
-    // Primary fix: Modifier.weight(1f) on both GameGrid composables in
-    //              OnlineBattleScreen.kt (Compose layer — not testable here).
-    // Data-layer guarantee: both BoardViewState lists must contain all 100 cells
-    //              (indices 0–99). Truncation here would compound the visual cut-off.
     // =========================================================================
 
     @Nested
@@ -352,7 +311,7 @@ class OnlineGameViewModelTest {
             advanceUntilIdle()
 
             assertEquals(100, vm.uiState.value.myBoard.cells.size,
-                "myBoard must have 100 cells — fewer would compound the Row 10 clip (Bug 3)")
+                "myBoard must have 100 cells")
         }
 
         @Test
@@ -389,8 +348,7 @@ class OnlineGameViewModelTest {
                 .filter { it.coord.index in 90..99 }
 
             assertEquals(10, row10.size,
-                "Row 10 (indices 90–99) must have all 10 cells — " +
-                "missing cells compound the visual clip confirmed on device (Bug 3)")
+                "Row 10 (indices 90–99) must have all 10 cells")
         }
 
         @Test
@@ -466,11 +424,6 @@ class OnlineGameViewModelTest {
 
     // =========================================================================
     // INTEGRATION — PlacementViewModel Part A ↔ OnlineGameViewModel Part B
-    //
-    // Verifies the complete write→read handshake through FakeGameRepository,
-    // mirroring the on-device flow:
-    //   PlacementViewModel.confirmPlacement() [Part A] writes PlayerSlot.ONE to Room.
-    //   OnlineGameViewModel.loadMyPlacements() [Part B] reads PlayerSlot.ONE from Room.
     // =========================================================================
 
     @Nested
@@ -480,11 +433,7 @@ class OnlineGameViewModelTest {
         fun `ships written by PlacementViewModel (Part A) appear in myBoard via OnlineGameViewModel (Part B)`() =
             runTest {
                 val firebaseGameId = "firebase-abc-456"
-
-                // Part A: what PlacementViewModel.confirmPlacement() ONLINE does
                 fakeRoom.saveBoardState(firebaseGameId, PlayerSlot.ONE, fullFleet)
-
-                // Part B: OnlineGameViewModel reads them back in loadMyPlacements()
                 val vm = buildVm(firebaseGameId)
                 advanceUntilIdle()
 
@@ -498,7 +447,6 @@ class OnlineGameViewModelTest {
         @Test
         fun `different gameIds are fully isolated in Room`() = runTest {
             fakeRoom.saveBoardState("game-A", PlayerSlot.ONE, fullFleet)
-            // game-B has nothing saved
 
             val vmB = buildVm("game-B")
             advanceUntilIdle()
@@ -508,6 +456,239 @@ class OnlineGameViewModelTest {
 
             assertEquals(0, count,
                 "VM for game-B must not see placements saved under game-A")
+        }
+    }
+
+    // =========================================================================
+    // SUNK SHIP DETECTION — Enemy waters board (attacker side)
+    //
+    // When I fire shots and the opponent's ship is fully sunk, all cells of that
+    // ship must change from HIT (red) → SUNK (orange) on the enemy waters board.
+    // The Destroyer occupies row 8, cols 0–1 (size 2).
+    // =========================================================================
+
+    @Nested
+    inner class SunkShipDetection_EnemyWatersBoard {
+
+        /**
+         * Helper: simulates MY shot being written to Firebase (as attacker),
+         * then the defender resolves and writes the result back.
+         * This mirrors the real async round-trip:
+         *   1. I call fireShot → shot written to Firebase with result=null
+         *   2. Defender's VM resolves → writeShotResult called with result + shipId
+         */
+        private suspend fun simulateMyShot(
+            gameId: String,
+            coord: Coord,
+            result: com.battleship.fleetcommand.core.domain.engine.FireResult,
+            shipId: String? = null,
+        ) {
+            // Write my shot as the attacker (myUid)
+            fakeFirebase.myUid = myUid
+            fakeFirebase.fireShot(gameId, coord)
+            // Simulate defender resolving it (writes result + shipId)
+            val shotIndex = fakeFirebase.getGame(gameId)
+                ?.let { @Suppress("UNCHECKED_CAST") (it["shots"] as? Map<String, List<*>>)?.get(myUid)?.size?.minus(1) }
+                ?: 0
+            fakeFirebase.writeShotResult(gameId, myUid, shotIndex, result, shipId)
+        }
+
+        @Test
+        fun `partial hits on Destroyer show HIT (red) not SUNK`() = runTest {
+            val (gameId, vm) = setupBattleGame()
+            advanceUntilIdle()
+
+            // Destroyer is at row 8, col 0 and col 1. Fire only col 0 → HIT, not SUNK
+            simulateMyShot(gameId, Coord.fromRowCol(8, 0),
+                com.battleship.fleetcommand.core.domain.engine.FireResult.HIT,
+                ShipId.DESTROYER.name)
+            advanceUntilIdle()
+
+            val cell = vm.uiState.value.opponentBoard.cells
+                .first { it.coord == Coord.fromRowCol(8, 0) }
+
+            assertEquals(CellDisplayState.HIT, cell.state,
+                "Single hit on Destroyer must show HIT not SUNK (ship not fully sunk yet)")
+        }
+
+        @Test
+        fun `all Destroyer cells turn SUNK after both cells are hit`() = runTest {
+            val (gameId, vm) = setupBattleGame()
+            advanceUntilIdle()
+
+            // Hit col 0 (HIT)
+            simulateMyShot(gameId, Coord.fromRowCol(8, 0),
+                com.battleship.fleetcommand.core.domain.engine.FireResult.HIT,
+                ShipId.DESTROYER.name)
+            // Hit col 1 (SUNK — this shot sinks the Destroyer)
+            simulateMyShot(gameId, Coord.fromRowCol(8, 1),
+                com.battleship.fleetcommand.core.domain.engine.FireResult.SUNK,
+                ShipId.DESTROYER.name)
+            advanceUntilIdle()
+
+            val board = vm.uiState.value.opponentBoard
+            val sunkCells = board.cells.filter { it.state == CellDisplayState.SUNK }
+
+            assertEquals(2, sunkCells.size,
+                "Both Destroyer cells (row 8, col 0 and 1) must be SUNK (orange). " +
+                "Got: ${sunkCells.map { it.coord }}")
+        }
+
+        @Test
+        fun `sinking Destroyer does not change cells of other ships`() = runTest {
+            val (gameId, vm) = setupBattleGame()
+            advanceUntilIdle()
+
+            // Sink the Destroyer
+            simulateMyShot(gameId, Coord.fromRowCol(8, 0),
+                com.battleship.fleetcommand.core.domain.engine.FireResult.HIT,
+                ShipId.DESTROYER.name)
+            simulateMyShot(gameId, Coord.fromRowCol(8, 1),
+                com.battleship.fleetcommand.core.domain.engine.FireResult.SUNK,
+                ShipId.DESTROYER.name)
+            advanceUntilIdle()
+
+            val board = vm.uiState.value.opponentBoard
+            // No cell should show HIT still (unless we also hit another ship partially)
+            // and the total sunk count should be exactly 2 (Destroyer cells only)
+            val sunkCount = board.cells.count { it.state == CellDisplayState.SUNK }
+            assertEquals(2, sunkCount,
+                "Only the 2 Destroyer cells should be SUNK; got $sunkCount SUNK cells")
+        }
+
+        @Test
+        fun `miss cell stays MISS after adjacent ship is sunk`() = runTest {
+            val (gameId, vm) = setupBattleGame()
+            advanceUntilIdle()
+
+            // Miss first
+            simulateMyShot(gameId, Coord.fromRowCol(9, 9),
+                com.battleship.fleetcommand.core.domain.engine.FireResult.MISS, null)
+            // Then sink Destroyer
+            simulateMyShot(gameId, Coord.fromRowCol(8, 0),
+                com.battleship.fleetcommand.core.domain.engine.FireResult.HIT,
+                ShipId.DESTROYER.name)
+            simulateMyShot(gameId, Coord.fromRowCol(8, 1),
+                com.battleship.fleetcommand.core.domain.engine.FireResult.SUNK,
+                ShipId.DESTROYER.name)
+            advanceUntilIdle()
+
+            val missCell = vm.uiState.value.opponentBoard.cells
+                .first { it.coord == Coord.fromRowCol(9, 9) }
+
+            assertEquals(CellDisplayState.MISS, missCell.state,
+                "Miss cell must stay MISS after a ship is sunk nearby")
+        }
+    }
+
+    // =========================================================================
+    // SUNK SHIP DETECTION — MY FLEET board (defender side)
+    //
+    // When the opponent sinks one of my ships, all cells of that ship must
+    // show SUNK (orange) on MY FLEET board.
+    // =========================================================================
+
+    @Nested
+    inner class SunkShipDetection_MyFleetBoard {
+
+        @Test
+        fun `all Destroyer cells show SUNK on my fleet after opponent sinks it`() = runTest {
+            val (gameId, vm) = setupBattleGame()
+            advanceUntilIdle()
+
+            // Opponent fires at my Destroyer (row 8, cols 0–1)
+            fakeFirebase.simulateOpponentShot(gameId, Coord.fromRowCol(8, 0))
+            advanceUntilIdle()
+            fakeFirebase.simulateOpponentShot(gameId, Coord.fromRowCol(8, 1))
+            advanceUntilIdle()
+
+            val board = vm.uiState.value.myBoard
+            val cell0 = board.cells.first { it.coord == Coord.fromRowCol(8, 0) }
+            val cell1 = board.cells.first { it.coord == Coord.fromRowCol(8, 1) }
+
+            assertTrue(
+                cell0.state == CellDisplayState.SUNK && cell1.state == CellDisplayState.SUNK,
+                "Both Destroyer cells must be SUNK on my fleet board. " +
+                "Got: (8,0)=${cell0.state}, (8,1)=${cell1.state}"
+            )
+        }
+
+        @Test
+        fun `partial opponent hits show HIT not SUNK on my fleet`() = runTest {
+            val (gameId, vm) = setupBattleGame()
+            advanceUntilIdle()
+
+            // Hit only one cell of Destroyer — should be HIT not SUNK
+            fakeFirebase.simulateOpponentShot(gameId, Coord.fromRowCol(8, 0))
+            advanceUntilIdle()
+
+            val cell = vm.uiState.value.myBoard.cells
+                .first { it.coord == Coord.fromRowCol(8, 0) }
+
+            assertEquals(CellDisplayState.HIT, cell.state,
+                "Single hit on Destroyer should be HIT, not SUNK (ship not fully sunk)")
+        }
+
+        @Test
+        fun `sunk Destroyer is marked in ownShips as sunk=true`() = runTest {
+            val (gameId, vm) = setupBattleGame()
+            advanceUntilIdle()
+
+            fakeFirebase.simulateOpponentShot(gameId, Coord.fromRowCol(8, 0))
+            advanceUntilIdle()
+            fakeFirebase.simulateOpponentShot(gameId, Coord.fromRowCol(8, 1))
+            advanceUntilIdle()
+
+            val destroyerView = vm.uiState.value.myBoard.ownShips
+                .firstOrNull { it.shipId == ShipId.DESTROYER }
+
+            assertTrue(destroyerView != null, "Destroyer must be in ownShips")
+            assertTrue(destroyerView!!.isSunk,
+                "Destroyer ShipPlacementViewState.isSunk must be true after sinking")
+        }
+    }
+
+    // =========================================================================
+    // HAPTIC — Sunk events fire SHIP_SUNK haptic exactly once per ship
+    // =========================================================================
+
+    @Nested
+    inner class HapticSunkEvents {
+
+        @Test
+        fun `defender receives SHIP_SUNK haptic exactly once when Destroyer is sunk`() = runTest {
+            val (gameId, _) = setupBattleGame()
+            advanceUntilIdle()
+
+            // Opponent fires two shots that sink my Destroyer
+            fakeFirebase.simulateOpponentShot(gameId, Coord.fromRowCol(8, 0))
+            advanceUntilIdle()
+            fakeFirebase.simulateOpponentShot(gameId, Coord.fromRowCol(8, 1))
+            advanceUntilIdle()
+
+            verify(exactly = 1) {
+                haptic.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.SHIP_SUNK)
+            }
+        }
+
+        @Test
+        fun `defender SHIP_SUNK haptic does not re-fire on subsequent Firebase updates`() = runTest {
+            val (gameId, _) = setupBattleGame()
+            advanceUntilIdle()
+
+            fakeFirebase.simulateOpponentShot(gameId, Coord.fromRowCol(8, 0))
+            advanceUntilIdle()
+            fakeFirebase.simulateOpponentShot(gameId, Coord.fromRowCol(8, 1))
+            advanceUntilIdle()
+
+            // Trigger another game state update (e.g., opponent connectivity change)
+            fakeFirebase.simulateOpponentDisconnect(gameId)
+            advanceUntilIdle()
+
+            // Should still be exactly 1, not 2
+            verify(exactly = 1) {
+                haptic.perform(com.battleship.fleetcommand.core.ui.haptic.HapticEvent.SHIP_SUNK)
+            }
         }
     }
 }
