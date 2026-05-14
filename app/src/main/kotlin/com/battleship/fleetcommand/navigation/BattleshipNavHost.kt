@@ -19,6 +19,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import com.battleship.fleetcommand.feature.game.battle.BattleScreen
 import com.battleship.fleetcommand.feature.game.gameover.GameOverScreen
+import com.battleship.fleetcommand.feature.game.gameover.PassAndPlayGameOverScreen
+import com.battleship.fleetcommand.feature.game.gameover.PassAndPlayGameOverViewModel
 import com.battleship.fleetcommand.feature.game.handoff.HandOffScreen
 import com.battleship.fleetcommand.feature.game.online.OnlineBattleScreen
 import com.battleship.fleetcommand.feature.lobby.OnlineLobbyScreen
