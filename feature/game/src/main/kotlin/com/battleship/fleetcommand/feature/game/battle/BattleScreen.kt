@@ -43,14 +43,12 @@ fun BattleScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showResignDialog by remember { mutableStateOf(false) }
 
-    // Pass & Play: observe saved state set by HandOffScreen when returning to this screen
     val passAndPlayResumeP1 = navController.currentBackStackEntry
         ?.savedStateHandle
         ?.getStateFlow<Boolean?>("passAndPlayResumeP1", null)
         ?.collectAsState()
     LaunchedEffect(passAndPlayResumeP1?.value) {
         val resumeP1 = passAndPlayResumeP1?.value ?: return@LaunchedEffect
-        // Clear the key so it doesn't fire again on recomposition
         navController.currentBackStackEntry?.savedStateHandle?.remove<Boolean>("passAndPlayResumeP1")
         if (resumeP1) {
             viewModel.onEvent(BattleViewModel.UiEvent.PassAndPlayResumeP1Turn)
@@ -59,7 +57,6 @@ fun BattleScreen(
         }
     }
 
-    // Section 12 BackHandler — shows resign dialog
     BackHandler { viewModel.onEvent(BattleViewModel.UiEvent.ResignGame) }
 
     LaunchedEffect(Unit) {
@@ -70,8 +67,6 @@ fun BattleScreen(
                         popUpTo<com.battleship.fleetcommand.navigation.MainMenuRoute> { inclusive = false }
                     }
                 is BattleViewModel.UiEffect.NavigateToPassAndPlayHandOff -> {
-                    // FIX: pass phase="BATTLE" so HandOffScreen uses popBackStack() + savedStateHandle
-                    // (correct for mid-game turn handoffs) rather than the SETUP forward-navigate path
                     navController.navigate(
                         HandOffRoute(
                             gameId = effect.gameId,
@@ -87,7 +82,6 @@ fun BattleScreen(
                 is BattleViewModel.UiEffect.ShowSunkAnimation -> {
                         val shipName = effect.shipId.name
                             .lowercase().replaceFirstChar { it.uppercase() }
-                        val isMyShot = uiState.isMyTurn || uiState.mode == com.battleship.fleetcommand.core.domain.model.GameMode.AI
                         val message = if (uiState.mode == com.battleship.fleetcommand.core.domain.model.GameMode.LOCAL) {
                             "${if (uiState.isMyTurn) uiState.opponentName else uiState.myName}'s $shipName was sunk!"
                         } else {
@@ -134,7 +128,6 @@ fun BattleScreen(
                 },
                 actions = {
                     IconButton(onClick = { viewModel.onEvent(BattleViewModel.UiEvent.ResignGame) }) {
-                        // Flag icon is in extended icons only — Close is semantically "exit/resign"
                         Icon(Icons.Default.Close, contentDescription = "Resign")
                     }
                 },
@@ -164,9 +157,6 @@ fun BattleScreen(
                 color = MaterialTheme.colorScheme.primary,
             )
             Box {
-                // Pass null when not the player's turn — GameCell removes the click modifier
-                // entirely so no pointer events can fire. This is the strongest possible
-                // spam guard: no lambda, no clickable(), no event routing at all.
                 val canFire = uiState.isMyTurn && !uiState.isAnimating && !uiState.isAiThinking
                 GameGrid(
                     board = uiState.opponentBoard,

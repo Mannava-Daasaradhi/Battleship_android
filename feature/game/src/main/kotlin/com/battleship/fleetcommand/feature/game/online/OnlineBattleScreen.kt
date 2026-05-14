@@ -38,7 +38,6 @@ fun OnlineBattleScreen(
     var showResignDialog by remember { mutableStateOf(false) }
     var showDisconnectDialog by remember { mutableStateOf(false) }
 
-    // Show a snackbar whenever a ship is sunk (attacker = "You sunk the X!" / defender = "Your X was sunk!")
     LaunchedEffect(uiState.sunkNotificationMessage) {
         val msg = uiState.sunkNotificationMessage ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(
@@ -92,10 +91,9 @@ fun OnlineBattleScreen(
         )
     }
 
-    // 📶 DISCONNECT DIALOG — Gives player the option to take the win if opponent abandons
     if (showDisconnectDialog) {
         AlertDialog(
-            onDismissRequest = { }, // Cannot dismiss without making a choice
+            onDismissRequest = { }, 
             title = { Text("Opponent Disconnected") },
             text = { Text("Your opponent has been disconnected for over 30 seconds. Do you want to claim victory by default or keep waiting?") },
             confirmButton = {

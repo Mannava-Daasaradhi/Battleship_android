@@ -73,8 +73,6 @@ class OnlineGameViewModel @Inject constructor(
         val opponentDisconnectedSeconds: Int = 0,
         val myShipCount: Int = 0,
         val opponentSunkCount: Int = 0,
-        // Non-null when a ship was just sunk — shown as a snackbar, then cleared.
-        // "You sunk the Carrier!" (attacker) or "Your Destroyer was sunk!" (defender).
         val sunkNotificationMessage: String? = null,
     )
 
@@ -85,7 +83,6 @@ class OnlineGameViewModel @Inject constructor(
         data class CellTapped(val coord: Coord) : UiEvent()
         data object ResignGame : UiEvent()
         data object ClaimVictoryOnTimeout : UiEvent()
-        /** Called by UI after the sunk-ship snackbar has been displayed. */
         data object SunkNotificationShown : UiEvent()
     }
 
@@ -114,13 +111,7 @@ class OnlineGameViewModel @Inject constructor(
     private var opponentUid: String = ""
     private var navigatedToGameOver = false
 
-    // ── Sunk-ship haptic dedup tracking ───────────────────────────────────
-    // Tracks which of MY shots resulted in a SUNK that we already fired haptic for.
-    // Key = shipId string from ShotData. Prevents re-firing on every Firebase update.
     private val attackerSunkHapticFiredFor = mutableSetOf<String>()
-
-    // Tracks which opponent ships sunk US that we already fired haptic for (defender side).
-    // Key = "row-col" of the sunk-triggering shot.
     private val defenderSunkHapticFiredFor = mutableSetOf<String>()
 
     init {
@@ -188,7 +179,14 @@ class OnlineGameViewModel @Inject constructor(
         val opponentData = state.players[state.opponentUid]
         val opponentConn = opponentData?.connected == true
         val opponentName = opponentData?.name ?: "Opponent"
-        val isMyTurn     = state.currentTurn == myUid
+        
+        val isMyTurnFromState = state.currentTurn == myUid
+
+        val resolvedIsMyTurn = if (_uiState.value.isAnimating && isMyTurnFromState) {
+            false
+        } else {
+            isMyTurnFromState
+        }
 
         val newStatus = when (state.status) {
             "setup"    -> GameStatus.WAITING
@@ -204,14 +202,13 @@ class OnlineGameViewModel @Inject constructor(
             cancelDisconnectTimer()
         }
 
-        // ── Build boards ───────────────────────────────────────────────────
         val newMyBoard       = buildMyBoard(state)
         val newOpponentBoard = buildOpponentBoard(state)
 
         _uiState.update {
             it.copy(
-                isMyTurn          = isMyTurn,
-                isAnimating       = if (isMyTurn) false else it.isAnimating,
+                isMyTurn          = resolvedIsMyTurn,
+                isAnimating       = if (!isMyTurnFromState) false else it.isAnimating,
                 opponentName      = opponentName,
                 opponentConnected = opponentConn,
                 gameStatus        = newStatus,
@@ -221,18 +218,13 @@ class OnlineGameViewModel @Inject constructor(
             )
         }
 
-        // ── Attacker haptic + sunk notification ──────────────────────────────
-        // Fire haptic once per newly-sunk enemy ship and surface a snackbar message.
         viewModelScope.launch {
             state.myShots
                 .filter { shot -> shot.result == FireResult.SUNK && shot.shipId != null }
                 .forEach { shot ->
-                    val key = shot.shipId!! // non-null guarded above
+                    val key = shot.shipId!! 
                     if (attackerSunkHapticFiredFor.add(key)) {
-                        // New sunk event — fire waveform haptic for attacker
                         hapticManager.perform(HapticEvent.SHIP_SUNK)
-                        // Derive a human-readable ship name from the shipId string.
-                        // shipId matches ShipId enum name (e.g. "CARRIER" → "Carrier").
                         val shipDisplayName = key.lowercase().replaceFirstChar { it.uppercase() }
                         _uiState.update {
                             it.copy(sunkNotificationMessage = "You sunk the $shipDisplayName!")
@@ -276,8 +268,6 @@ class OnlineGameViewModel @Inject constructor(
         }
     }
 
-    // ── MY FLEET board ─────────────────────────────────────────────────────
-    // Shows my ships; opponent's hits on them. Sunk ships turn orange.
     private fun buildMyBoard(state: OnlineGameState): BoardViewState {
         val cells = Array(GameConstants.TOTAL_CELLS) { CellDisplayState.WATER }
         for (p in myPlacements) {
@@ -293,7 +283,6 @@ class OnlineGameViewModel @Inject constructor(
             }
         }
 
-        // Detect which of my ships are fully sunk by opponent hits
         val opponentShotCoords = state.opponentShots
             .filter { it.result == FireResult.HIT || it.result == FireResult.SUNK }
             .map { it.coord }.toSet()
@@ -301,7 +290,6 @@ class OnlineGameViewModel @Inject constructor(
             .filter { p -> p.occupiedCoords().all { it in opponentShotCoords } }
             .map { it.shipId }.toSet()
 
-        // Colour all cells of sunk ships orange on my fleet board
         for (p in myPlacements.filter { it.shipId in sunkIds }) {
             for (c in p.occupiedCoords()) if (c.isValid()) cells[c.index] = CellDisplayState.SUNK
         }
@@ -313,17 +301,9 @@ class OnlineGameViewModel @Inject constructor(
         return BoardViewState(cells = cellViews, ownShips = shipViews)
     }
 
-    // ── ENEMY WATERS board ─────────────────────────────────────────────────
-    // Shows fog of war; my hits/misses on opponent. Sunk enemy ships turn orange.
-    //
-    // How we detect sunk cells without knowing opponent's placements:
-    // Firebase stores result=SUNK and shipId on the shot that triggered the sunk.
-    // All prior shots whose shipId matches that SUNK shot are part of the same ship.
-    // We colour ALL cells that share a shipId with any SUNK-result shot as SUNK.
     private fun buildOpponentBoard(state: OnlineGameState): BoardViewState {
         val cells = Array(GameConstants.TOTAL_CELLS) { CellDisplayState.WATER }
 
-        // Collect all shipIds that have been fully sunk (result == SUNK)
         val sunkShipIds: Set<String> = state.myShots
             .filter { it.result == FireResult.SUNK && it.shipId != null }
             .map { it.shipId!! }
@@ -333,13 +313,8 @@ class OnlineGameViewModel @Inject constructor(
             val coord = shot.coord
             if (!coord.isValid()) continue
             when (shot.result) {
-                FireResult.SUNK -> {
-                    // The sinking shot itself — mark SUNK (orange)
-                    cells[coord.index] = CellDisplayState.SUNK
-                }
+                FireResult.SUNK -> cells[coord.index] = CellDisplayState.SUNK
                 FireResult.HIT -> {
-                    // This HIT might belong to a ship that was later sunk;
-                    // check if its shipId is in the sunkShipIds set.
                     val displayState = if (shot.shipId != null && shot.shipId in sunkShipIds) {
                         CellDisplayState.SUNK
                     } else {
@@ -353,7 +328,6 @@ class OnlineGameViewModel @Inject constructor(
         }
 
         val cellViews = cells.mapIndexed { i, s -> CellViewState(Coord(i), s) }.toImmutableList()
-        // No ownShips on enemy board — ships stay hidden (showShips=false in UI)
         return BoardViewState(cells = cellViews)
     }
 
@@ -364,16 +338,10 @@ class OnlineGameViewModel @Inject constructor(
         }
     }
 
-    // ── Resolve shots fired at ME by the opponent ──────────────────────────
-    // This runs on the DEFENDER's device. We:
-    //   1. Check each unresolved shot against our placements
-    //   2. Write the result back to Firebase
-    //   3. Fire haptic feedback for HIT / MISS / SHIP_SUNK
-    //      SHIP_SUNK haptic deduped via defenderSunkHapticFiredFor to avoid
-    //      re-firing on every Firebase snapshot update.
     private suspend fun resolveNewOpponentShots(shots: List<ShotData>) {
         shots.forEachIndexed { index, shotData ->
             if (shotData.result != null) return@forEachIndexed
+            
             val key = "$index-${shotData.row}-${shotData.col}"
             if (key in resolvedShotKeys) return@forEachIndexed
             resolvedShotKeys.add(key)
@@ -390,25 +358,13 @@ class OnlineGameViewModel @Inject constructor(
                 is ShotOutcome.Miss -> FireResult.MISS
             }
 
-            // Resolve the shipId to persist alongside the result.
-            // For HIT and SUNK, shipId identifies which enemy ship was struck so the
-            // ATTACKER's device can group hits by ship and render SUNK (orange) once
-            // all cells of that ship are hit. MISS has no associated ship.
             val shipIdString: String? = when (outcome) {
                 is ShotOutcome.Hit  -> outcome.shipId.name
                 is ShotOutcome.Sunk -> outcome.shipId.name
                 is ShotOutcome.Miss -> null
             }
 
-            // Atomically write result + shipId + flip turn in ONE Firebase multi-path update.
-            // Replaces the old two-call pattern (writeShotResult + flipTurn) that caused:
-            //   1. Turn lag — attacker saw intermediate state with result written but turn not yet flipped.
-            //   2. Partial SUNK rendering — board rebuilt between result-write and shipId-write,
-            //      leaving shipId=null in the snapshot so all sunk cells rendered as HIT (red).
-            // nextTurnUid = myUid because turns ALTERNATE — after the defender resolves the
-            // attacker's shot, it becomes the DEFENDER's turn to fire. The defender is myUid
-            // on this device. (opponentUid here is the attacker — the person who fired.)
-            repository.commitShotAndFlipTurn(
+            val commitResult = repository.commitShotAndFlipTurn(
                 gameId      = gameId,
                 shooterUid  = opponentUid,
                 shotIndex   = index,
@@ -417,17 +373,20 @@ class OnlineGameViewModel @Inject constructor(
                 nextTurnUid = myUid,
             )
 
-            // ── Defender haptic + sunk notification ───────────────────────
-            // SHIP_SUNK haptic deduped: only fires once per sunk event.
-            // For SUNK we also surface a snackbar so the defender knows which of
-            // their ships the opponent just sank.
+            // CRITICAL FIX: If the write fails, we must remove it from the set so it 
+            // can be retried on the next snapshot, otherwise the game locks permanently.
+            if (commitResult.isFailure) {
+                resolvedShotKeys.remove(key)
+                Timber.e(commitResult.exceptionOrNull(), "commitShotAndFlipTurn failed for key: $key")
+                return@forEachIndexed
+            }
+
             when (fireResult) {
                 FireResult.HIT  -> hapticManager.perform(HapticEvent.HIT)
                 FireResult.MISS -> hapticManager.perform(HapticEvent.MISS)
                 FireResult.SUNK -> {
                     if (defenderSunkHapticFiredFor.add(key)) {
                         hapticManager.perform(HapticEvent.SHIP_SUNK)
-                        // shipIdString is the ShipId enum name (e.g. "DESTROYER").
                         val shipDisplayName = (shipIdString ?: "Ship")
                             .lowercase().replaceFirstChar { it.uppercase() }
                         _uiState.update {
