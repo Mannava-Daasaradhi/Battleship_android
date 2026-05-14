@@ -1,4 +1,4 @@
-// FILE: feature/game/src/main/kotlin/com/battleship/fleetcommand/feature/game/gameover/GameOverViewModel.kt
+// FILE: feature/game/src/main/kotlin/com/battleship/fleetcommand/feature/game/gameover/PassAndPlayGameOverViewModel.kt
 package com.battleship.fleetcommand.feature.game.gameover
 
 import androidx.compose.runtime.Immutable
@@ -10,14 +10,13 @@ import com.battleship.fleetcommand.core.domain.Coord
 import com.battleship.fleetcommand.core.domain.GameConstants
 import com.battleship.fleetcommand.core.domain.player.PlayerSlot
 import com.battleship.fleetcommand.core.domain.repository.GameRepository
-import com.battleship.fleetcommand.core.domain.repository.StatsRepository
 import com.battleship.fleetcommand.core.domain.ship.ShipPlacement
 import com.battleship.fleetcommand.core.domain.ship.ShipRegistry
 import com.battleship.fleetcommand.core.ui.model.BoardViewState
 import com.battleship.fleetcommand.core.ui.model.CellDisplayState
 import com.battleship.fleetcommand.core.ui.model.CellViewState
 import com.battleship.fleetcommand.core.ui.model.ShipPlacementViewState
-import com.battleship.fleetcommand.navigation.GameOverRoute
+import com.battleship.fleetcommand.navigation.PassAndPlayGameOverRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -31,21 +30,18 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class GameOverViewModel @Inject constructor(
+class PassAndPlayGameOverViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle,
     private val gameRepository: GameRepository,
-    private val statsRepository: StatsRepository,
 ) : ViewModel() {
 
-    private val route: GameOverRoute = savedStateHandle.toRoute()
+    private val route: PassAndPlayGameOverRoute = savedStateHandle.toRoute()
 
     @Immutable
     data class UiState(
         val winner: String = "",
-        val isPlayerWin: Boolean = false,
-        val isPassAndPlay: Boolean = false,
-        val myBoard: BoardViewState = BoardViewState.empty(),
-        val opponentBoard: BoardViewState = BoardViewState.empty(),
+        val p1Board: BoardViewState = BoardViewState.empty(),
+        val p2Board: BoardViewState = BoardViewState.empty(),
         val p1Accuracy: Int = 0,
         val p1Shots: Int = 0,
         val p2Accuracy: Int = 0,
@@ -65,7 +61,7 @@ class GameOverViewModel @Inject constructor(
         data object NavigateToModeSelect : UiEffect()
     }
 
-    private val _uiState = MutableStateFlow(UiState())
+    private val _uiState = MutableStateFlow(UiState(winner = route.winner))
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     private val _uiEffect = MutableSharedFlow<UiEffect>(replay = 0)
@@ -78,71 +74,36 @@ class GameOverViewModel @Inject constructor(
     }
 
     private suspend fun loadGameResult() {
-        val gameId = route.gameId
-        val winner = route.winner
-        val isOnlineGame = gameId.isBlank()
-        
-        // Pass & Play detection: Local game where winner is not "You" or "AI"
-        val isPassAndPlay = !isOnlineGame && winner != "You" && winner != "AI"
-
-        val isPlayerWin = when {
-            isPassAndPlay -> true                       
-            winner == "You" -> true                     
-            isOnlineGame && winner != "You" -> false    
-            winner == "AI" -> false                     
-            winner.isBlank() -> false                   
-            else -> true                                
-        }
-
-        _uiState.update { 
-            it.copy(
-                winner = winner, 
-                isPlayerWin = isPlayerWin,
-                isPassAndPlay = isPassAndPlay
-            ) 
-        }
-
-        // Inject the stats directly from the route for Online Games
-        if (isOnlineGame) {
-            _uiState.update { 
-                it.copy(
-                    isLoading = false,
-                    p1Shots = route.totalShots,
-                    p1Accuracy = route.accuracy
-                ) 
-            }
-            return
-        }
-
         try {
-            val myPlacements = gameRepository.getBoardState(gameId, PlayerSlot.ONE) ?: emptyList()
-            val aiPlacements = gameRepository.getBoardState(gameId, PlayerSlot.TWO) ?: emptyList()
-            val shots        = gameRepository.getShots(gameId)
+            val gameId = route.gameId
+            val p1Placements = gameRepository.getBoardState(gameId, PlayerSlot.ONE) ?: emptyList()
+            val p2Placements = gameRepository.getBoardState(gameId, PlayerSlot.TWO) ?: emptyList()
+            val shots = gameRepository.getShots(gameId)
             
-            val p1ShotsList  = shots.filter { it.firedBy == PlayerSlot.ONE }
-            val p2ShotsList  = shots.filter { it.firedBy == PlayerSlot.TWO }
+            val p1ShotsList = shots.filter { it.firedBy == PlayerSlot.ONE }
+            val p2ShotsList = shots.filter { it.firedBy == PlayerSlot.TWO }
 
-            val p1ShotCoords  = p1ShotsList.map { it.coord }.toSet()
-            val p2ShotCoords  = p2ShotsList.map { it.coord }.toSet()
+            val p1ShotCoords = p1ShotsList.map { it.coord }.toSet()
+            val p2ShotCoords = p2ShotsList.map { it.coord }.toSet()
             
-            val p1Hits = p1ShotsList.count { s -> aiPlacements.any { p -> s.coord in p.occupiedCoords() } }
-            val p2Hits = p2ShotsList.count { s -> myPlacements.any { p -> s.coord in p.occupiedCoords() } }
+            val p1Hits = p1ShotsList.count { s -> p2Placements.any { p -> s.coord in p.occupiedCoords() } }
+            val p2Hits = p2ShotsList.count { s -> p1Placements.any { p -> s.coord in p.occupiedCoords() } }
             
             val p1Acc = if (p1ShotsList.isEmpty()) 0 else (p1Hits * 100) / p1ShotsList.size
             val p2Acc = if (p2ShotsList.isEmpty()) 0 else (p2Hits * 100) / p2ShotsList.size
 
-            val myBoard       = buildRevealedBoard(myPlacements, p2ShotCoords)
-            val opponentBoard = buildRevealedBoard(aiPlacements, p1ShotCoords)
+            val p1Board = buildRevealedBoard(p1Placements, p2ShotCoords)
+            val p2Board = buildRevealedBoard(p2Placements, p1ShotCoords)
 
             _uiState.update {
                 it.copy(
-                    myBoard       = myBoard,
-                    opponentBoard = opponentBoard,
-                    p1Accuracy    = p1Acc,
-                    p1Shots       = p1ShotsList.size,
-                    p2Accuracy    = p2Acc,
-                    p2Shots       = p2ShotsList.size,
-                    isLoading     = false,
+                    p1Board = p1Board,
+                    p2Board = p2Board,
+                    p1Accuracy = p1Acc,
+                    p1Shots = p1ShotsList.size,
+                    p2Accuracy = p2Acc,
+                    p2Shots = p2ShotsList.size,
+                    isLoading = false,
                 )
             }
         } catch (e: Exception) {
@@ -153,9 +114,9 @@ class GameOverViewModel @Inject constructor(
     fun onEvent(event: UiEvent) {
         viewModelScope.launch {
             when (event) {
-                UiEvent.PlayAgain  -> _uiEffect.emit(UiEffect.NavigateToModeSelect)
-                UiEvent.MainMenu   -> _uiEffect.emit(UiEffect.NavigateToMainMenu)
-                UiEvent.ViewStats  -> _uiEffect.emit(UiEffect.NavigateToStatistics)
+                UiEvent.PlayAgain -> _uiEffect.emit(UiEffect.NavigateToModeSelect)
+                UiEvent.MainMenu -> _uiEffect.emit(UiEffect.NavigateToMainMenu)
+                UiEvent.ViewStats -> _uiEffect.emit(UiEffect.NavigateToStatistics)
             }
         }
     }
@@ -167,7 +128,7 @@ class GameOverViewModel @Inject constructor(
             for (c in p.occupiedCoords()) {
                 if (c.isValid()) cells[c.index] = when {
                     p.shipId in sunkIds -> CellDisplayState.SUNK
-                    else                -> CellDisplayState.SHIP
+                    else -> CellDisplayState.SHIP
                 }
             }
         }

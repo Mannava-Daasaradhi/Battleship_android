@@ -135,5 +135,14 @@ fun BattleshipNavHost(modifier: Modifier = Modifier) {
         composable<SettingsRoute> {
             SettingsScreen(navController = navController, viewModel = hiltViewModel())
         }
+
+        composable<PassAndPlayGameOverRoute> {
+            val viewModel: PassAndPlayGameOverViewModel = hiltViewModel()
+            PassAndPlayGameOverScreen(
+                navController = navController,
+                viewModel = viewModel,
+                route = it.toRoute()
+            )
+        }
     }
 }

@@ -29,6 +29,7 @@ import com.battleship.fleetcommand.core.ui.model.CellViewState
 import com.battleship.fleetcommand.core.ui.theme.NavyBackground
 import com.battleship.fleetcommand.core.ui.theme.NavySurface
 import com.battleship.fleetcommand.navigation.GameOverRoute
+import com.battleship.fleetcommand.navigation.PassAndPlayGameOverRoute
 import com.battleship.fleetcommand.navigation.HandOffRoute
 import kotlinx.coroutines.flow.collectLatest
 
@@ -64,6 +65,10 @@ fun BattleScreen(
             when (effect) {
                 is BattleViewModel.UiEffect.NavigateToGameOver ->
                     navController.navigate(GameOverRoute(gameId = effect.gameId, winner = effect.winner)) {
+                        popUpTo<com.battleship.fleetcommand.navigation.MainMenuRoute> { inclusive = false }
+                    }
+                is BattleViewModel.UiEffect.NavigateToPassAndPlayGameOver ->
+                    navController.navigate(PassAndPlayGameOverRoute(gameId = effect.gameId, winner = effect.winner)) {
                         popUpTo<com.battleship.fleetcommand.navigation.MainMenuRoute> { inclusive = false }
                     }
                 is BattleViewModel.UiEffect.NavigateToPassAndPlayHandOff -> {

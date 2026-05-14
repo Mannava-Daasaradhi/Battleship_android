@@ -8,6 +8,7 @@ import kotlinx.serialization.Serializable
 @Serializable object ModeSelectRoute
 @Serializable data class DifficultyRoute(val mode: String)
 @Serializable data class PlayerNamesRoute(val mode: String)
+@Serializable data class PassAndPlayGameOverRoute(val gameId: String, val winner: String)
 @Serializable data class ShipPlacementRoute(
     val mode: String,
     val playerSlot: Int = 0,
