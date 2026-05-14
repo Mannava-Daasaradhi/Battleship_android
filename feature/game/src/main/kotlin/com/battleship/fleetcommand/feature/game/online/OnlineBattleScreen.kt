@@ -33,9 +33,20 @@ fun OnlineBattleScreen(
     route: com.battleship.fleetcommand.navigation.OnlineBattleRoute,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    
+    val snackbarHostState = remember { SnackbarHostState() }
+
     var showResignDialog by remember { mutableStateOf(false) }
     var showDisconnectDialog by remember { mutableStateOf(false) }
+
+    // Show a snackbar whenever a ship is sunk (attacker = "You sunk the X!" / defender = "Your X was sunk!")
+    LaunchedEffect(uiState.sunkNotificationMessage) {
+        val msg = uiState.sunkNotificationMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(
+            message = msg,
+            duration = SnackbarDuration.Short,
+        )
+        viewModel.onEvent(OnlineGameViewModel.UiEvent.SunkNotificationShown)
+    }
 
     BackHandler { showResignDialog = true }
 
@@ -118,6 +129,7 @@ fun OnlineBattleScreen(
 
     Scaffold(
         modifier = Modifier.safeDrawingPadding(),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {

@@ -40,6 +40,7 @@ fun BattleScreen(
     route: com.battleship.fleetcommand.navigation.BattleRoute,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
     var showResignDialog by remember { mutableStateOf(false) }
 
     // Pass & Play: observe saved state set by HandOffScreen when returning to this screen
@@ -83,7 +84,20 @@ fun BattleScreen(
                 BattleViewModel.UiEffect.ShowResignDialog -> showResignDialog = true
                 is BattleViewModel.UiEffect.ShowHitAnimation  -> { }
                 is BattleViewModel.UiEffect.ShowMissAnimation -> { }
-                is BattleViewModel.UiEffect.ShowSunkAnimation -> { }
+                is BattleViewModel.UiEffect.ShowSunkAnimation -> {
+                        val shipName = effect.shipId.name
+                            .lowercase().replaceFirstChar { it.uppercase() }
+                        val isMyShot = uiState.isMyTurn || uiState.mode == com.battleship.fleetcommand.core.domain.model.GameMode.AI
+                        val message = if (uiState.mode == com.battleship.fleetcommand.core.domain.model.GameMode.LOCAL) {
+                            "${if (uiState.isMyTurn) uiState.opponentName else uiState.myName}'s $shipName was sunk!"
+                        } else {
+                            "You sunk the $shipName!"
+                        }
+                        snackbarHostState.showSnackbar(
+                            message = message,
+                            duration = SnackbarDuration.Short,
+                        )
+                    }
             }
         }
     }
@@ -109,6 +123,7 @@ fun BattleScreen(
 
     Scaffold(
         modifier = Modifier.safeDrawingPadding(),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {

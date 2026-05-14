@@ -241,26 +241,35 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Atomically writes the shot result + shipId AND flips currentTurn in a SINGLE
-     * Firebase multi-path updateChildren() call.
+     * Writes the shot result + shipId AND flips currentTurn using TWO sequential writes.
      *
-     * Why this matters:
-     * The old pattern was writeShotResult() + flipTurn() — two separate .await() calls.
-     * Firebase's ValueEventListener fires after EACH write, so both devices saw a
-     * partial intermediate state between the two writes:
-     *   - After write 1 (result written): shot shows resolved, but turn not yet flipped.
-     *     Attacker's board briefly thought it was still their turn (lag/bug).
-     *     Attacker's buildOpponentBoard ran with shipId=null → sunk cells stayed red.
-     *   - After write 2 (shipId written): board re-rendered with correct shipId.
-     *     But the damage is done — the intermediate render caused visible jank.
+     * ── WHY NOT a single updateChildren() from game root? ──
+     * The Firebase Security Rules for /shots/{shooterUid} grant write access ONLY to
+     * auth.uid === $shooterUid (the ATTACKER). This function is called by the DEFENDER
+     * (the person whose ships were hit). Even though the nested
+     * /shots/{shooterUid}/{pushKey}/result node has its own rule allowing the defender
+     * to write THAT specific field, a multi-path updateChildren() rooted at the game
+     * node includes paths under /shots/{shooterUid}/ — Firebase evaluates the ancestor
+     * rule (auth.uid === $shooterUid) and rejects the ENTIRE batch write for the
+     * defender. Result: result is never written, turn never flips, game is stuck.
      *
-     * updateChildren() writes all paths in a single operation → single listener event
-     * → both boards rebuild once with complete, consistent data.
+     * Fix: Two separate writes scoped to the exact paths each party is allowed to write:
+     *   Write 1 — defender writes result + shipId directly on the shot's push-key node.
+     *             The $shotPushKey parent rule allows the defender to write here
+     *             (see database.rules.json — $shotPushKey allows both parties to write
+     *              when the shot is unresolved, and result sub-rule allows non-shooter).
+     *   Write 2 — defender writes meta/currentTurn (allowed: any authenticated player
+     *             in the game may write to /meta per its .write rule).
      *
-     * Firebase path structure written:
-     *   games/{gameId}/shots/{shooterUid}/{pushKey}/result  = "hit"|"miss"|"sunk"
-     *   games/{gameId}/shots/{shooterUid}/{pushKey}/shipId  = "CARRIER"|null|etc.
-     *   games/{gameId}/meta/currentTurn                     = nextTurnUid
+     * The intermediate state (result written, turn not yet flipped) is observable for
+     * ~100ms on slow connections, but this is far preferable to the turn being
+     * permanently stuck. The attacker's ViewModel guards against acting on the
+     * intermediate state: isMyTurn is set to false IMMEDIATELY when they fire (before
+     * Firebase confirms), so there is no "turn re-enables" jank on the attacker side.
+     *
+     * Firebase path writes:
+     *   Call 1: games/{gameId}/shots/{shooterUid}/{pushKey}/updateChildren({result, shipId})
+     *   Call 2: games/{gameId}/meta/currentTurn = nextTurnUid
      */
     override suspend fun commitShotAndFlipTurn(
         gameId: String,
@@ -271,8 +280,7 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
         nextTurnUid: String,
     ): Result<Unit> {
         return try {
-            // Resolve the push-key for this shot by index.
-            // Firebase uses push-keys (chronological), so elementAtOrNull by index is correct.
+            // ── Step 1: Resolve push-key for this shot by index ─────────────
             val shotsRef = database.getReference(
                 "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.SHOTS}/$shooterUid"
             )
@@ -280,26 +288,24 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
             val pushKey = snapshot.children.elementAtOrNull(shotIndex)?.key
                 ?: return Result.failure(Exception("Shot push-key not found at index $shotIndex"))
 
-            // Build a single multi-path update map.
-            // Keys are RELATIVE to the game root (/games/{gameId}).
-            val gameRootRef = database.getReference("${FirebaseSchema.GAMES}/$gameId")
+            // ── Step 2: Write result + shipId on the shot push-key node ─────
+            // updateChildren() scoped to the push-key node — the defender is allowed
+            // to write result here per security rules. shipId inherits the push-key
+            // node's rule which now permits non-shooter writes (see database.rules.json).
+            val shotNodeRef = shotsRef.child(pushKey)
+            val shotUpdate = mapOf<String, Any?>(
+                FirebaseSchema.SHOT_RESULT  to result.toSchemaString(),
+                FirebaseSchema.SHOT_SHIP_ID to shipId,
+            )
+            shotNodeRef.updateChildren(shotUpdate).await()
 
-            val updates: Map<String, Any?> = buildMap {
-                put(
-                    "${FirebaseSchema.SHOTS}/$shooterUid/$pushKey/${FirebaseSchema.SHOT_RESULT}",
-                    result.toSchemaString()
-                )
-                put(
-                    "${FirebaseSchema.SHOTS}/$shooterUid/$pushKey/${FirebaseSchema.SHOT_SHIP_ID}",
-                    shipId   // null is valid here — Firebase will write null (clearing stale values)
-                )
-                put(
-                    "${FirebaseSchema.META}/${FirebaseSchema.CURRENT_TURN}",
-                    nextTurnUid
-                )
-            }
+            // ── Step 3: Flip currentTurn to the defender ────────────────────
+            // nextTurnUid = myUid on the defender's device (it becomes the defender's
+            // turn to fire after they resolve the attacker's shot).
+            database.getReference(
+                "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.META}/${FirebaseSchema.CURRENT_TURN}"
+            ).setValue(nextTurnUid).await()
 
-            gameRootRef.updateChildren(updates).await()
             Result.success(Unit)
         } catch (e: Exception) {
             Timber.w(e, "commitShotAndFlipTurn failed game=$gameId shooter=$shooterUid index=$shotIndex")

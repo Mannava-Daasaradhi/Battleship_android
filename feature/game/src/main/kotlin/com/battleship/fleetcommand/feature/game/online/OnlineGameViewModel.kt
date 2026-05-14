@@ -73,6 +73,9 @@ class OnlineGameViewModel @Inject constructor(
         val opponentDisconnectedSeconds: Int = 0,
         val myShipCount: Int = 0,
         val opponentSunkCount: Int = 0,
+        // Non-null when a ship was just sunk — shown as a snackbar, then cleared.
+        // "You sunk the Carrier!" (attacker) or "Your Destroyer was sunk!" (defender).
+        val sunkNotificationMessage: String? = null,
     )
 
     enum class ConnectionStatus { CONNECTED, RECONNECTING, DISCONNECTED }
@@ -82,6 +85,8 @@ class OnlineGameViewModel @Inject constructor(
         data class CellTapped(val coord: Coord) : UiEvent()
         data object ResignGame : UiEvent()
         data object ClaimVictoryOnTimeout : UiEvent()
+        /** Called by UI after the sunk-ship snackbar has been displayed. */
+        data object SunkNotificationShown : UiEvent()
     }
 
     sealed class UiEffect {
@@ -130,6 +135,7 @@ class OnlineGameViewModel @Inject constructor(
             is UiEvent.CellTapped            -> handleCellTapped(event.coord)
             is UiEvent.ResignGame            -> handleResign()
             is UiEvent.ClaimVictoryOnTimeout -> handleClaimVictory()
+            is UiEvent.SunkNotificationShown -> _uiState.update { it.copy(sunkNotificationMessage = null) }
         }
     }
 
@@ -215,9 +221,8 @@ class OnlineGameViewModel @Inject constructor(
             )
         }
 
-        // ── Attacker haptic: fire SHIP_SUNK once per newly-sunk enemy ship ─
-        // We look at myShots for any SUNK result whose shipId we haven't yet
-        // fired haptic for. shipId in ShotData identifies which enemy ship sank.
+        // ── Attacker haptic + sunk notification ──────────────────────────────
+        // Fire haptic once per newly-sunk enemy ship and surface a snackbar message.
         viewModelScope.launch {
             state.myShots
                 .filter { shot -> shot.result == FireResult.SUNK && shot.shipId != null }
@@ -226,6 +231,12 @@ class OnlineGameViewModel @Inject constructor(
                     if (attackerSunkHapticFiredFor.add(key)) {
                         // New sunk event — fire waveform haptic for attacker
                         hapticManager.perform(HapticEvent.SHIP_SUNK)
+                        // Derive a human-readable ship name from the shipId string.
+                        // shipId matches ShipId enum name (e.g. "CARRIER" → "Carrier").
+                        val shipDisplayName = key.lowercase().replaceFirstChar { it.uppercase() }
+                        _uiState.update {
+                            it.copy(sunkNotificationMessage = "You sunk the $shipDisplayName!")
+                        }
                     }
                 }
         }
@@ -406,15 +417,22 @@ class OnlineGameViewModel @Inject constructor(
                 nextTurnUid = myUid,
             )
 
-            // ── Defender haptic ────────────────────────────────────────────
-            // SHIP_SUNK deduped: only fires once per sunk event.
-            // For SUNK we use the shot key (each sunk has exactly one triggering shot).
+            // ── Defender haptic + sunk notification ───────────────────────
+            // SHIP_SUNK haptic deduped: only fires once per sunk event.
+            // For SUNK we also surface a snackbar so the defender knows which of
+            // their ships the opponent just sank.
             when (fireResult) {
                 FireResult.HIT  -> hapticManager.perform(HapticEvent.HIT)
                 FireResult.MISS -> hapticManager.perform(HapticEvent.MISS)
                 FireResult.SUNK -> {
                     if (defenderSunkHapticFiredFor.add(key)) {
                         hapticManager.perform(HapticEvent.SHIP_SUNK)
+                        // shipIdString is the ShipId enum name (e.g. "DESTROYER").
+                        val shipDisplayName = (shipIdString ?: "Ship")
+                            .lowercase().replaceFirstChar { it.uppercase() }
+                        _uiState.update {
+                            it.copy(sunkNotificationMessage = "Your $shipDisplayName was sunk!")
+                        }
                     }
                 }
             }
