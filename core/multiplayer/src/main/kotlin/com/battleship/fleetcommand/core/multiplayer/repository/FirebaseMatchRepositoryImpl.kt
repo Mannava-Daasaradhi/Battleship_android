@@ -216,14 +216,34 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun writeShotResult(gameId: String, shooterUid: String, shotIndex: Int, result: FireResult) {
+    /**
+     * Writes the resolved result (and optional shipId) for a shot the opponent fired.
+     *
+     * Per the Firebase security rules, only the non-shooter (the defender) may write
+     * the `result` field — the rules enforce `auth.uid !== $shooterUid` on that path.
+     * The [shipId] is written to the same push-key node so the attacker can reconstruct
+     * which cells belong to a sunk ship and render them in orange (SUNK state).
+     */
+    override suspend fun writeShotResult(
+        gameId: String,
+        shooterUid: String,
+        shotIndex: Int,
+        result: FireResult,
+        shipId: String?,
+    ) {
         try {
             val shotsRef = database.getReference("${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.SHOTS}/$shooterUid")
             val snapshot = shotsRef.get().await()
             val pushKey = snapshot.children.elementAtOrNull(shotIndex)?.key ?: return
 
-            shotsRef.child(pushKey).child(FirebaseSchema.SHOT_RESULT).setValue(result.toSchemaString()).await()
-        } catch (e: Exception) {}
+            val shotNode = shotsRef.child(pushKey)
+            shotNode.child(FirebaseSchema.SHOT_RESULT).setValue(result.toSchemaString()).await()
+            // Write shipId for HIT and SUNK so attacker can colour sunk cells correctly.
+            // For MISS this is null and we still write it to clear any stale value.
+            shotNode.child(FirebaseSchema.SHOT_SHIP_ID).setValue(shipId).await()
+        } catch (e: Exception) {
+            Timber.w(e, "writeShotResult failed for game=$gameId shooter=$shooterUid index=$shotIndex")
+        }
     }
 
     override suspend fun flipTurn(gameId: String, nextPlayerUid: String): Result<Unit> {

@@ -188,17 +188,23 @@ class FakeFirebaseDatabase : FirebaseMatchRepository {
         return Result.success(Unit)
     }
 
-    // Signature matches the real interface exactly:
-    // writeShotResult(gameId, shooterUid, shotIndex: Int, result: FireResult)
+    /**
+     * Updated to accept the optional [shipId] param added to the interface.
+     * Writes both the result and the shipId so sunk-ship detection works in tests.
+     * Signature matches [FirebaseMatchRepository.writeShotResult] exactly:
+     *   writeShotResult(gameId, shooterUid, shotIndex, result, shipId?)
+     */
     override suspend fun writeShotResult(
         gameId: String,
         shooterUid: String,
         shotIndex: Int,
-        result: FireResult
+        result: FireResult,
+        shipId: String?,
     ) {
         val node = games[gameId] ?: return
         val shot = node.shots[shooterUid]?.getOrNull(shotIndex) ?: return
         shot.result = result
+        shot.shipId = shipId
         stateFlows[gameId]?.value = node
     }
 
