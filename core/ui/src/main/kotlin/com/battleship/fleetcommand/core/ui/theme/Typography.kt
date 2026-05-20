@@ -8,10 +8,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 
-// Tracking constants — wide spacing gives naval/military feel.
-private val TrackingWide   = 0.12.em
-private val TrackingXWide  = 0.20.em
-private val TrackingXXWide = 0.28.em
+// Tracking constants — calibrated for system SansSerif (Roboto/Noto).
+// The previous values (0.12–0.28em) were designed for a custom military stencil
+// font. On Roboto they look extremely stretched. These values give a clean,
+// slightly wide military feel without looking broken.
+private val TrackingWide   = 0.04.em   // was 0.12 — labels, body
+private val TrackingXWide  = 0.06.em   // was 0.20 — titles, headlines
+private val TrackingXXWide = 0.08.em   // was 0.28 — display / hero text
 
 // Using system default font families — no network dependency, no Play Services cert required.
 // DisplayFamily: SansSerif Bold for headings (military stencil feel)

@@ -28,12 +28,15 @@ import kotlinx.coroutines.flow.collectLatest
  * HandOffScreen — CANNOT be skipped. Full opaque overlay. 3-second mandatory countdown.
  * Back gesture completely disabled. Screen orientation locked. Section 8.4, Section 12.
  *
- * FIX: The `phase` field on [HandOffRoute] now distinguishes two use-cases:
+ * FIX (turn bug): In the BATTLE phase, we must write to BattleScreen's savedStateHandle
+ * BEFORE calling popBackStack(). popBackStack() is async — after calling it,
+ * currentBackStackEntry is still HandOffScreen, not BattleScreen.
+ * The correct target is navController.previousBackStackEntry (= BattleScreen while
+ * HandOff is still on the stack), then pop.
+ *
+ * FIX (setup): The `phase` field on [HandOffRoute] distinguishes two use-cases:
  *   - "SETUP"  → initial placement handoff between P1 and P2 (or P2 to Battle start)
  *   - "BATTLE" → mid-game turn handoff during Pass & Play battles
- *
- * Without this distinction, P2's post-placement handoff incorrectly tried to
- * popBackStack() to BattleScreen which had never been pushed onto the stack.
  */
 @Composable
 fun HandOffScreen(
@@ -78,9 +81,8 @@ fun HandOffScreen(
                         }
 
                         phase == "SETUP" && mode == "LOCAL" && !route.isP1HandOff -> {
-                            // FIX: After P2 places fleet → navigate forward to BattleScreen.
-                            // Old code did popBackStack() here which went back to P2's placement
-                            // screen because BattleScreen had never been pushed onto the stack.
+                            // After P2 places fleet → navigate forward to BattleScreen.
+                            // Do NOT popBackStack() here — BattleScreen was never pushed.
                             navController.navigate(
                                 com.battleship.fleetcommand.navigation.BattleRoute(gameId = gameId)
                             ) {
@@ -103,12 +105,14 @@ fun HandOffScreen(
 
                         // ── BATTLE phase: mid-game turn handoffs (Pass & Play only) ──
                         phase == "BATTLE" -> {
-                            // Pop back to BattleScreen (it IS in the back stack during battle)
-                            // and signal whose turn begins via saved state handle.
-                            navController.popBackStack()
-                            navController.currentBackStackEntry
+                            // FIX: Write to previousBackStackEntry (= BattleScreen) BEFORE
+                            // popping. After popBackStack() the currentBackStackEntry pointer
+                            // is still HandOff until the coroutine yields, so writing to
+                            // currentBackStackEntry after the pop silently drops the signal.
+                            navController.previousBackStackEntry
                                 ?.savedStateHandle
                                 ?.set("passAndPlayResumeP1", route.isP1HandOff)
+                            navController.popBackStack()
                         }
 
                         else -> {
