@@ -118,7 +118,7 @@ firebase-analytics          = { group = "com.google.firebase", name = "firebase-
 firebase-crashlytics        = { group = "com.google.firebase", name = "firebase-crashlytics-ktx", version.ref = "firebase-crashlytics-ktx" }
 firebase-auth               = { group = "com.google.firebase", name = "firebase-auth-ktx", version.ref = "firebase-auth-ktx" }
 firebase-database           = { group = "com.google.firebase", name = "firebase-database-ktx", version.ref = "firebase-database-ktx" }
-firebase-functions          = { group = "com.google.firebase", name = "firebase-functions-ktx" }
+firebase-functions          = { group = "com.google.firebase", name = "firebase-functions" }
 
 # ── Google Play ───────────────────────────────────────────────────────────
 play-services-games-v2      = { group = "com.google.android.gms", name = "play-services-games-v2", version.ref = "play-services-games-v2" }

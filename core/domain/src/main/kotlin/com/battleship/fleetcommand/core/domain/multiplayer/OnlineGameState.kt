@@ -47,7 +47,8 @@ data class ShotData(
     val col: Int,
     val result: FireResult?,     // null until defender writes the result
     val shipId: String?,         // null for MISS results
-    val timestamp: Long
+    val timestamp: Long,
+    val pushKey: String = "",    // Firebase push-key for this shot; used by defender to update result
 ) {
     val coord: Coord get() = Coord.fromRowCol(row, col)
 }

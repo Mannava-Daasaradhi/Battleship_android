@@ -81,6 +81,8 @@ dependencies {
 
     // Security
     implementation(libs.security.crypto)
+    implementation(libs.sqlcipher.android)
+    implementation(libs.sqlite)
 
     // Play Integrity
     implementation(libs.play.integrity)
