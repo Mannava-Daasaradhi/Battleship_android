@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    PATH:  app/src/main/res/drawable/logo_fleet_command.xml
+    USAGE: Use as an Android Vector Drawable — load via painterResource() in Compose.
+
+        Image(
+            painter            = painterResource(R.drawable.logo_fleet_command),
+            contentDescription = "Fleet Command crest",
+            modifier           = Modifier.size(64.dp),
+        )
+
+    Tint dynamically with `colorFilter = ColorFilter.tint(GoldAccent)` if you want
+    to drop the bake-in colour and recolour from the theme. By default it renders
+    as #D4AF37 antique gold — matching the brand mark.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+
+    <!-- Outer hex frame -->
+    <path
+        android:strokeColor="#D4AF37"
+        android:strokeWidth="1.8"
+        android:strokeLineJoin="round"
+        android:pathData="M32 3 L57 17.5 L57 46.5 L32 61 L7 46.5 L7 17.5 Z" />
+
+    <!-- Inner hex frame -->
+    <path
+        android:strokeColor="#8CD4AF37"
+        android:strokeWidth="0.9"
+        android:strokeLineJoin="round"
+        android:pathData="M32 9 L51.5 20.3 L51.5 43.7 L32 55 L12.5 43.7 L12.5 20.3 Z" />
+
+    <!-- Anchor: ring -->
+    <path
+        android:strokeColor="#D4AF37"
+        android:strokeWidth="1.8"
+        android:pathData="M32 16.8 m -3.2 0 a 3.2 3.2 0 1 0 6.4 0 a 3.2 3.2 0 1 0 -6.4 0" />
+
+    <!-- Anchor: shaft -->
+    <path
+        android:strokeColor="#D4AF37"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M32 23.2 L32 45" />
+
+    <!-- Anchor: crossbar -->
+    <path
+        android:strokeColor="#D4AF37"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M25 27.5 L39 27.5" />
+
+    <!-- Anchor: fluke curve -->
+    <path
+        android:strokeColor="#D4AF37"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M22 38 Q22 46 32 46 Q42 46 42 38" />
+
+    <!-- Anchor: left tips -->
+    <path
+        android:strokeColor="#D4AF37"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M22 38 L19.5 35.5 M22 38 L22 35" />
+
+    <!-- Anchor: right tips -->
+    <path
+        android:strokeColor="#D4AF37"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:pathData="M42 38 L44.5 35.5 M42 38 L42 35" />
+
+    <!-- Bottom rule -->
+    <path
+        android:strokeColor="#B3D4AF37"
+        android:strokeWidth="0.9"
+        android:pathData="M26 50 L38 50" />
+</vector>

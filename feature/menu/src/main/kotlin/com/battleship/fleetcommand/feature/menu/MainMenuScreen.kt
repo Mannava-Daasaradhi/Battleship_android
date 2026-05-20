@@ -1,9 +1,24 @@
-// FILE: feature/menu/src/main/kotlin/com/battleship/fleetcommand/feature/menu/MainMenuScreen.kt
+// ============================================================
+// MainMenuScreen — annotated upgrade
+// ============================================================
+//
+// PURPOSE
+//   Shows EXACTLY what changes once you adopt the design system:
+//     1. Drop in the new Typography.kt — every MaterialTheme.typography.* call
+//        already in your code now uses Big Shoulders Display / Inter automatically.
+//     2. Swap the ⚓ emoji for the brand crest vector drawable.
+//     3. Optionally switch stat numerics to MonoFamily for tabular alignment.
+//
+// EVERYTHING ELSE — colors, layout, animation, navigation — IS UNCHANGED.
+// Diff vs the file in your repo is ~10 lines.
+//
+// ============================================================
 package com.battleship.fleetcommand.feature.menu
 
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -12,17 +27,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.battleship.fleetcommand.core.ui.components.BattleshipButton
 import com.battleship.fleetcommand.core.ui.theme.GoldAccent
+import com.battleship.fleetcommand.core.ui.theme.MonoFamily          // ⟵ NEW
 import com.battleship.fleetcommand.core.ui.theme.NavyBackground
 import com.battleship.fleetcommand.core.ui.theme.NavySurface
 import com.battleship.fleetcommand.core.ui.theme.NavySurfaceVariant
+import com.battleship.fleetcommand.core.ui.R                          // ⟵ NEW (for R.drawable.logo_fleet_command)
 import com.battleship.fleetcommand.navigation.ModeSelectRoute
 import com.battleship.fleetcommand.navigation.SettingsRoute
 import com.battleship.fleetcommand.navigation.StatisticsRoute
@@ -38,19 +54,18 @@ fun MainMenuScreen(
     LaunchedEffect(Unit) {
         viewModel.uiEffect.collectLatest { effect ->
             when (effect) {
-                MenuViewModel.UiEffect.NavigateToModeSelect   -> navController.navigate(ModeSelectRoute)
-                MenuViewModel.UiEffect.NavigateToSettings     -> navController.navigate(SettingsRoute)
-                MenuViewModel.UiEffect.NavigateToStatistics   -> navController.navigate(StatisticsRoute)
+                MenuViewModel.UiEffect.NavigateToModeSelect -> navController.navigate(ModeSelectRoute)
+                MenuViewModel.UiEffect.NavigateToSettings   -> navController.navigate(SettingsRoute)
+                MenuViewModel.UiEffect.NavigateToStatistics -> navController.navigate(StatisticsRoute)
             }
         }
     }
 
-    // Entrance animation
     var revealed by remember { mutableStateOf(false) }
     val titleScale by animateFloatAsState(
-        targetValue = if (revealed) 1f else 0.85f,
+        targetValue   = if (revealed) 1f else 0.85f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
-        label = "titleScale",
+        label         = "titleScale",
     )
     LaunchedEffect(Unit) { revealed = true }
 
@@ -64,8 +79,8 @@ fun MainMenuScreen(
                             0.0f to NavySurface,
                             0.5f to NavyBackground,
                             1.0f to NavyBackground,
-                        )
-                    )
+                        ),
+                    ),
                 )
                 .padding(paddingValues)
                 .padding(horizontal = 32.dp),
@@ -75,54 +90,48 @@ fun MainMenuScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                // Animated title block
+                // ── Title block ──────────────────────────────────────────────
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.graphicsLayer { scaleX = titleScale; scaleY = titleScale },
+                    modifier            = Modifier.graphicsLayer { scaleX = titleScale; scaleY = titleScale },
                 ) {
-                    Text(
-                        text = "⚓",
-                        fontSize = 56.sp,
+                    // BEFORE:  Text("⚓", fontSize = 56.sp)
+                    // AFTER ↓  Use the brand crest vector drawable.
+                    Image(
+                        painter            = painterResource(R.drawable.logo_fleet_command),
+                        contentDescription = null,
+                        modifier           = Modifier.size(56.dp),
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "BATTLESHIP",
-                        style = MaterialTheme.typography.headlineLarge.copy(
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 4.sp,
-                        ),
-                        color = GoldAccent,
-                        textAlign = TextAlign.Center,
+                        text       = "BATTLESHIP",
+                        style      = MaterialTheme.typography.headlineLarge,   // now Big Shoulders Display Black
+                        color      = GoldAccent,
+                        textAlign  = TextAlign.Center,
                     )
                     Text(
-                        text = "FLEET COMMAND",
-                        style = MaterialTheme.typography.titleMedium.copy(letterSpacing = 3.sp),
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                        text      = "FLEET COMMAND",
+                        style     = MaterialTheme.typography.titleMedium,      // now Inter SemiBold
+                        color     = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                         textAlign = TextAlign.Center,
                     )
                 }
 
-                // Stats summary card
+                // ── Stats chip strip ─────────────────────────────────────────
                 Surface(
-                    shape = MaterialTheme.shapes.medium,
-                    color = NavySurfaceVariant,
+                    shape          = MaterialTheme.shapes.medium,
+                    color          = NavySurfaceVariant,
                     tonalElevation = 4.dp,
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier       = Modifier.fillMaxWidth(),
                 ) {
                     Row(
-                        modifier = Modifier.padding(vertical = 14.dp, horizontal = 16.dp),
+                        modifier             = Modifier.padding(vertical = 14.dp, horizontal = 16.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                     ) {
-                        StatChip(label = "Wins", value = uiState.stats.wins.toString())
-                        VerticalDivider(
-                            modifier = Modifier.height(36.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                        )
+                        StatChip(label = "Wins",     value = uiState.stats.wins.toString())
+                        VerticalDivider(modifier = Modifier.height(36.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
                         StatChip(label = "Win Rate", value = "${uiState.stats.winRatePercent}%")
-                        VerticalDivider(
-                            modifier = Modifier.height(36.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                        )
+                        VerticalDivider(modifier = Modifier.height(36.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
                         StatChip(label = "Accuracy", value = "${uiState.stats.accuracyPercent}%")
                     }
                 }
@@ -130,20 +139,20 @@ fun MainMenuScreen(
                 Spacer(modifier = Modifier.height(4.dp))
 
                 BattleshipButton(
-                    text = "▶  PLAY",
-                    onClick = { viewModel.onEvent(MenuViewModel.UiEvent.PlayVsAi) },
+                    text     = "▶  PLAY",
+                    onClick  = { viewModel.onEvent(MenuViewModel.UiEvent.PlayVsAi) },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier              = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     OutlinedButton(
-                        onClick = { viewModel.onEvent(MenuViewModel.UiEvent.OpenStatistics) },
+                        onClick  = { viewModel.onEvent(MenuViewModel.UiEvent.OpenStatistics) },
                         modifier = Modifier.weight(1f),
                     ) { Text("STATS") }
                     OutlinedButton(
-                        onClick = { viewModel.onEvent(MenuViewModel.UiEvent.OpenSettings) },
+                        onClick  = { viewModel.onEvent(MenuViewModel.UiEvent.OpenSettings) },
                         modifier = Modifier.weight(1f),
                     ) { Text("SETTINGS") }
                 }
@@ -155,13 +164,15 @@ fun MainMenuScreen(
 @Composable
 private fun StatChip(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // BEFORE: style = titleLarge.copy(fontWeight = FontWeight.Bold)
+        // AFTER ↓ tabular mono digits — perfect column alignment between stats.
         Text(
-            text = value,
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+            text  = value,
+            style = MaterialTheme.typography.titleLarge.copy(fontFamily = MonoFamily),
             color = GoldAccent,
         )
         Text(
-            text = label,
+            text  = label,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
         )

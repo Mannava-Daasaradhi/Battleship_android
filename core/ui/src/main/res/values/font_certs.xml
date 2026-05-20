@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    PATH:  app/src/main/res/values/font_certs.xml
+    PURPOSE:
+        Public certificate hashes for the Google Fonts downloadable font provider.
+        Required by Typography.kt's GoogleFont.Provider initialiser.
+        These are the *real* public hashes published by Google — copy verbatim.
+        Source: https://developer.android.com/develop/ui/views/text-and-emoji/downloadable-fonts
+-->
+<resources>
+    <string-array name="com_google_android_gms_fonts_certs">
+        <item>@array/com_google_android_gms_fonts_certs_dev</item>
+        <item>@array/com_google_android_gms_fonts_certs_prod</item>
+    </string-array>
+
+    <string-array name="com_google_android_gms_fonts_certs_dev">
+        <item>
+MIIEqDCCA5CgAwIBAgIJANWFuGx90071MA0GCSqGSIb3DQEBBAUAMIGUMQswCQYD
+VQQGEwJVUzETMBEGA1UECBMKQ2FsaWZvcm5pYTEWMBQGA1UEBxMNTW91bnRhaW4g
+VmlldzEQMA4GA1UEChMHQW5kcm9pZDEQMA4GA1UECxMHQW5kcm9pZDEQMA4GA1UE
+AxMHQW5kcm9pZDEiMCAGCSqGSIb3DQEJARYTYW5kcm9pZEBhbmRyb2lkLmNvbTAe
+Fw0wODA0MTUyMzM2NTZaFw0zNTA5MDEyMzM2NTZaMIGUMQswCQYDVQQGEwJVUzET
+MBEGA1UECBMKQ2FsaWZvcm5pYTEWMBQGA1UEBxMNTW91bnRhaW4gVmlldzEQMA4G
+A1UEChMHQW5kcm9pZDEQMA4GA1UECxMHQW5kcm9pZDEQMA4GA1UEAxMHQW5kcm9p
+ZDEiMCAGCSqGSIb3DQEJARYTYW5kcm9pZEBhbmRyb2lkLmNvbTCCASAwDQYJKoZI
+hvcNAQEBBQADggENADCCAQgCggEBANbOLggKv+IxTdGNs8/TGFy0PTP6DHThvbbR
+24kT9ixcOd9W+EaBPWW+wPPKQmsHxajtWjmQwWfna8mZuSeJS48LIgAZlKkpFeVy
+xW0qMBujb8X8ETrWy550NaFtI6t9+u7hZeTfHwqNvacKhp1RbE6dBRGWynwMVX8X
+W8N1+UjFaq6GCJukT4qmpN2afb8sCjUigq0GuMwHfB1XDNYtvSf/IiTafhb/Anvd
+L+tqSRGSzl1c1AX4Ok5GbQ2c+xCk9ftXIWQQyTaAQR6KsOf+wRZdMI/Lyj7gNz1L
+26HfaiUNiNVAaomXjwHHnyMUUFm1Wgcq/8gqQHsuD7s4VFUcDpsCAQOjgfwwgfkw
+HQYDVR0OBBYEFI0cxb6VTEM8YYY6FbBMvAPyT+CyMIHJBgNVHSMEgcEwgb6AFI0c
+xb6VTEM8YYY6FbBMvAPyT+CyoYGapIGXMIGUMQswCQYDVQQGEwJVUzETMBEGA1UE
+CBMKQ2FsaWZvcm5pYTEWMBQGA1UEBxMNTW91bnRhaW4gVmlldzEQMA4GA1UEChMH
+QW5kcm9pZDEQMA4GA1UECxMHQW5kcm9pZDEQMA4GA1UEAxMHQW5kcm9pZDEiMCAG
+CSqGSIb3DQEJARYTYW5kcm9pZEBhbmRyb2lkLmNvbYIJANWFuGx90071MAwGA1Ud
+EwQFMAMBAf8wDQYJKoZIhvcNAQEEBQADggEBABnTDPEF+3iSP0wNfdIjIz1AlnrP
+zgAIHVvXxunW7SBrDhEglQZBbKJEk5kT0mtKoOD1JMrSu1xuTKEBahWRbqHsXcla
+XPI0a82QHX0+RsxnHpkSDQHGRHd8Bz/Vp9hRWLrYbyEd1MtWNNRWvxbVm9610wkW
+1UDH7m3Ah7Phl5KTwbS2+JLZyA+u3RkpfGwUiB+vDdHK/+VtaT5pk0xpKwlpVcA8
+2K33fSmFLfHwz0gOcGv4FNVKQ4Z5kFnt/yWPSwWa97zCXfQv7grBVm6JjLNQ5dG3
+EvkPV28YJGfsLKpKLwwfsoYXmykB85Wf3sytkUmrFm6+yldUM4eDfQqJM/E=
+        </item>
+    </string-array>
+
+    <string-array name="com_google_android_gms_fonts_certs_prod">
+        <item>
+MIIEQzCCAyugAwIBAgIJAMLgh0ZkSjCNMA0GCSqGSIb3DQEBBAUAMHQxCzAJBgNV
+BAYTAlVTMRMwEQYDVQQIEwpDYWxpZm9ybmlhMRYwFAYDVQQHEw1Nb3VudGFpbiBW
+aWV3MRQwEgYDVQQKEwtHb29nbGUgSW5jLjEQMA4GA1UECxMHQW5kcm9pZDEQMA4G
+A1UEAxMHQW5kcm9pZDAeFw0wODA4MjEyMzEzMzRaFw0zNjAxMDcyMzEzMzRaMHQx
+CzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpDYWxpZm9ybmlhMRYwFAYDVQQHEw1Nb3Vu
+dGFpbiBWaWV3MRQwEgYDVQQKEwtHb29nbGUgSW5jLjEQMA4GA1UECxMHQW5kcm9p
+ZDEQMA4GA1UEAxMHQW5kcm9pZDCCASAwDQYJKoZIhvcNAQEBBQADggENADCCAQgC
+ggEBAKtWLgDYO6IIrgqWbxJOKdoR8qtW0I9Y4sypEwPpt1TTcvZApxsdyxMJZ2JO
+RToL5ah4nTm5JzjUcCKogGNYHGwd+jp76gqGGtfPdwY/uvYDmDFTRUcQ4nMJoFvb
+GAuG7QqIzVbBolMcQyMUEhszYDFi3JmrclpwSXjnxAhKZi64DOoz4xkoBpvB2VlJ
+2nWN4eDeJ22XzjxZb6kSrK4FbHhdsBkN1ehBz2avgcKL27SLPHvOXKMshtSiTPnT
+PEKqQfQ1nbB1QyyXcL5UMnAhsR/5XSWk/Be9b1OkjcRpx0sCc0jU/8H8tcgujwhz
+fzwS62fdAuMyjJ5wF+sNDsmRDM0CAQOjgdkwgdYwHQYDVR0OBBYEFMd9jMIhF1Ya
+0EvqnDImYxLEnsefMIGmBgNVHSMEgZ4wgZuAFMd9jMIhF1Ya0EvqnDImYxLEnsef
+oXikdjB0MQswCQYDVQQGEwJVUzETMBEGA1UECBMKQ2FsaWZvcm5pYTEWMBQGA1UE
+BxMNTW91bnRhaW4gVmlldzEUMBIGA1UEChMLR29vZ2xlIEluYy4xEDAOBgNVBAsT
+B0FuZHJvaWQxEDAOBgNVBAMTB0FuZHJvaWSCCQDC4IdGZEowjTAMBgNVHRMEBTAD
+AQH/MA0GCSqGSIb3DQEBBAUAA4IBAQBt0lLO74UwLDYKqs6Tm8/yzKkEu116FmH4
+rkaymUIE0P9KaMftGlMexFlaYjzmB2OxZyl6euNXEsQH8gjwyxCUKRJNexBiGcCE
+yj6laxbSdJF98+JRWSmqdEWvQB2L1T5ZNcZ/x82SLEN1pjeXi5RXP56nbsAxMSiZ
+Btb4UTo5UV9bdMaY1eDp+JxX6+e63R/uWGB3Ks7n9plF5oVAFkSomYwQDD7ouOhg
+LZ9Eb87Mvk8tBmRr6CGfTKxRTUk9P8jHKnNUlYRTbWiqvBz8tnv+vrIfx5wbqLNF
+8YWXqzj3VsxyHQ4FwQ7lhA5Hs9jBI6X2I3sFI/Z7QZpKy8GVfP6P
+        </item>
+    </string-array>
+</resources>
