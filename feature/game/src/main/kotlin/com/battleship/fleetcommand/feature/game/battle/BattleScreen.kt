@@ -1,3 +1,4 @@
+// FILE: feature/game/src/main/kotlin/com/battleship/fleetcommand/feature/game/battle/BattleScreen.kt
 package com.battleship.fleetcommand.feature.game.battle
 
 import androidx.activity.compose.BackHandler
@@ -16,7 +17,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -44,17 +44,21 @@ fun BattleScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     var showResignDialog by remember { mutableStateOf(false) }
 
-    val passAndPlayResumeP1 = navController.currentBackStackEntry
-        ?.savedStateHandle
-        ?.getStateFlow<Boolean?>("passAndPlayResumeP1", null)
-        ?.collectAsState()
-    LaunchedEffect(passAndPlayResumeP1?.value) {
-        val resumeP1 = passAndPlayResumeP1?.value ?: return@LaunchedEffect
-        navController.currentBackStackEntry?.savedStateHandle?.remove<Boolean>("passAndPlayResumeP1")
-        if (resumeP1) {
-            viewModel.onEvent(BattleViewModel.UiEvent.PassAndPlayResumeP1Turn)
-        } else {
-            viewModel.onEvent(BattleViewModel.UiEvent.PassAndPlayResumeP2Turn)
+    // ── Pass & Play turn-resume via SavedStateHandle ────────────────────────
+    // FIX: Instead of using LaunchedEffect(value) as the key (which misses
+    // repeated same-value emissions after remove+set cycles), we collect the
+    // StateFlow in a long-lived LaunchedEffect(Unit) and consume each non-null
+    // value exactly once, then clear it so the next hand-off fires correctly.
+    LaunchedEffect(Unit) {
+        val handle = navController.currentBackStackEntry?.savedStateHandle ?: return@LaunchedEffect
+        handle.getStateFlow<Boolean?>("passAndPlayResumeP1", null).collectLatest { resumeP1 ->
+            resumeP1 ?: return@collectLatest          // ignore null (initial / already consumed)
+            handle.remove<Boolean>("passAndPlayResumeP1") // consume immediately
+            if (resumeP1) {
+                viewModel.onEvent(BattleViewModel.UiEvent.PassAndPlayResumeP1Turn)
+            } else {
+                viewModel.onEvent(BattleViewModel.UiEvent.PassAndPlayResumeP2Turn)
+            }
         }
     }
 
@@ -85,18 +89,18 @@ fun BattleScreen(
                 is BattleViewModel.UiEffect.ShowHitAnimation  -> { }
                 is BattleViewModel.UiEffect.ShowMissAnimation -> { }
                 is BattleViewModel.UiEffect.ShowSunkAnimation -> {
-                        val shipName = effect.shipId.name
-                            .lowercase().replaceFirstChar { it.uppercase() }
-                        val message = if (uiState.mode == com.battleship.fleetcommand.core.domain.model.GameMode.LOCAL) {
-                            "${if (uiState.isMyTurn) uiState.opponentName else uiState.myName}'s $shipName was sunk!"
-                        } else {
-                            "You sunk the $shipName!"
-                        }
-                        snackbarHostState.showSnackbar(
-                            message = message,
-                            duration = SnackbarDuration.Short,
-                        )
+                    val shipName = effect.shipId.name
+                        .lowercase().replaceFirstChar { it.uppercase() }
+                    val message = if (uiState.mode == com.battleship.fleetcommand.core.domain.model.GameMode.LOCAL) {
+                        "${if (uiState.isMyTurn) uiState.opponentName else uiState.myName}'s $shipName was sunk!"
+                    } else {
+                        "You sunk the $shipName!"
                     }
+                    snackbarHostState.showSnackbar(
+                        message = message,
+                        duration = SnackbarDuration.Short,
+                    )
+                }
             }
         }
     }
