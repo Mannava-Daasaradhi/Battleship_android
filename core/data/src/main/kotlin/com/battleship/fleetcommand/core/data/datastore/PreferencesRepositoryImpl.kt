@@ -1,6 +1,7 @@
 // FILE: core/data/src/main/kotlin/com/battleship/fleetcommand/core/data/datastore/PreferencesRepositoryImpl.kt
 package com.battleship.fleetcommand.core.data.datastore
 
+import android.content.SharedPreferences
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
@@ -21,7 +22,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class PreferencesRepositoryImpl @Inject constructor(
-    private val dataStore: DataStore<Preferences>
+    private val dataStore: DataStore<Preferences>,
+    private val encryptedPrefs: SharedPreferences,
 ) : PreferencesRepository {
 
     override fun observePlayerName(): Flow<String> =
@@ -78,9 +80,20 @@ class PreferencesRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getOnlinePlayerUid(): String? =
-        dataStore.data.first()[DataStoreKeys.ONLINE_PLAYER_UID]
+        encryptedPrefs.getString(ENCRYPTED_UID_KEY, null)
 
     override suspend fun setOnlinePlayerUid(uid: String) {
-        dataStore.edit { it[DataStoreKeys.ONLINE_PLAYER_UID] = uid }
+        encryptedPrefs.edit().putString(ENCRYPTED_UID_KEY, uid).apply()
+    }
+
+    override fun observeAnalyticsConsent(): Flow<Boolean> =
+        dataStore.data.map { it[DataStoreKeys.ANALYTICS_CONSENT] ?: false }
+
+    override suspend fun setAnalyticsConsent(consented: Boolean) {
+        dataStore.edit { it[DataStoreKeys.ANALYTICS_CONSENT] = consented }
+    }
+
+    companion object {
+        private const val ENCRYPTED_UID_KEY = "online_player_uid"
     }
 }

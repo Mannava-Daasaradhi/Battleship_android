@@ -26,6 +26,7 @@ class FakePreferencesRepository(
     private val adjacencyMode = MutableStateFlow(AdjacencyMode.RELAXED)
     private var currentGameId: String? = null
     private var onlinePlayerUid: String? = null
+    private val analyticsConsent = MutableStateFlow(false)
 
     override fun observePlayerName(): Flow<String>           = playerName
     override fun observeDifficulty(): Flow<Difficulty>       = difficulty
@@ -42,4 +43,6 @@ class FakePreferencesRepository(
     override suspend fun setCurrentGameId(id: String?)         { currentGameId = id }
     override suspend fun getOnlinePlayerUid(): String?          = onlinePlayerUid
     override suspend fun setOnlinePlayerUid(uid: String)       { onlinePlayerUid = uid }
+    override fun observeAnalyticsConsent(): Flow<Boolean>      = analyticsConsent
+    override suspend fun setAnalyticsConsent(consented: Boolean) { analyticsConsent.value = consented }
 }

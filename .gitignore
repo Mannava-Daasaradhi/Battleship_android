@@ -17,6 +17,7 @@ captures/
 app/google-services.json
 # Commit this template with dummy values instead
 !app/google-services.json.template
+.firebaserc
 
 # Secrets
 *.env

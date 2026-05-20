@@ -37,6 +37,12 @@ firebase-database-ktx         = "21.0.0"
 
 # Google Play
 play-services-games-v2        = "20.1.2"
+play-integrity                = "1.4.0"
+
+# Security
+security-crypto               = "1.1.0-alpha06"
+sqlcipher                     = "4.6.1"
+sqlite                        = "2.4.0"
 
 # Image loading
 coil                          = "2.7.0"
@@ -112,9 +118,16 @@ firebase-analytics          = { group = "com.google.firebase", name = "firebase-
 firebase-crashlytics        = { group = "com.google.firebase", name = "firebase-crashlytics-ktx", version.ref = "firebase-crashlytics-ktx" }
 firebase-auth               = { group = "com.google.firebase", name = "firebase-auth-ktx", version.ref = "firebase-auth-ktx" }
 firebase-database           = { group = "com.google.firebase", name = "firebase-database-ktx", version.ref = "firebase-database-ktx" }
+firebase-functions          = { group = "com.google.firebase", name = "firebase-functions-ktx" }
 
 # ── Google Play ───────────────────────────────────────────────────────────
 play-services-games-v2      = { group = "com.google.android.gms", name = "play-services-games-v2", version.ref = "play-services-games-v2" }
+play-integrity              = { group = "com.google.android.play", name = "integrity", version.ref = "play-integrity" }
+
+# ── Security ──────────────────────────────────────────────────────────────
+security-crypto             = { group = "androidx.security", name = "security-crypto", version.ref = "security-crypto" }
+sqlcipher-android           = { group = "net.zetetic", name = "sqlcipher-android", version.ref = "sqlcipher" }
+sqlite                      = { group = "androidx.sqlite", name = "sqlite-ktx", version.ref = "sqlite" }
 
 # ── Image / Animation ─────────────────────────────────────────────────────
 coil-compose                = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }

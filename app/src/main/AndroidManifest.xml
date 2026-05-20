@@ -14,13 +14,19 @@
 
     <application
         android:name=".BattleshipApplication"
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:icon="@mipmap/ic_launcher"
         android:label="Battleship Fleet Command"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.App.Starting"
         tools:targetApi="34">
+
+        <!-- F-13: Disable Firebase Analytics auto-collection until consent obtained -->
+        <meta-data android:name="firebase_analytics_collection_deactivated" android:value="true" />
 
         <!--
             Play Games Services App ID — Section 7.

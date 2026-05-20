@@ -26,4 +26,6 @@ interface PreferencesRepository {
     suspend fun setCurrentGameId(id: String?)
     suspend fun getOnlinePlayerUid(): String?
     suspend fun setOnlinePlayerUid(uid: String)
+    fun observeAnalyticsConsent(): Flow<Boolean>
+    suspend fun setAnalyticsConsent(consented: Boolean)
 }

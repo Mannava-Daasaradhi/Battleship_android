@@ -77,6 +77,13 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.analytics)
     implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.functions)
+
+    // Security
+    implementation(libs.security.crypto)
+
+    // Play Integrity
+    implementation(libs.play.integrity)
 
     // Navigation + Activity
     implementation(libs.navigation.compose)

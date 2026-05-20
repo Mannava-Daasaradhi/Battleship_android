@@ -11,12 +11,12 @@ import com.battleship.fleetcommand.core.domain.multiplayer.GameCreationResult
 import com.battleship.fleetcommand.core.domain.multiplayer.JoinResult
 import com.battleship.fleetcommand.core.domain.multiplayer.OnlineGameState
 import com.battleship.fleetcommand.core.domain.multiplayer.ShotData
+import com.battleship.fleetcommand.core.domain.multiplayer.ShotResolutionResult
 import com.battleship.fleetcommand.core.domain.ship.ShipPlacement
 import com.battleship.fleetcommand.core.multiplayer.FirebaseSchema
 import com.battleship.fleetcommand.core.multiplayer.auth.FirebaseAuthManager
 import com.battleship.fleetcommand.core.multiplayer.mapper.GameSyncMapper
 import com.battleship.fleetcommand.core.multiplayer.mapper.ShipPlacementDto
-import com.battleship.fleetcommand.core.multiplayer.mapper.toSchemaString
 import com.battleship.fleetcommand.core.multiplayer.matchmaking.MatchmakingRepository
 import com.google.firebase.database.ChildEventListener
 import com.google.firebase.database.DataSnapshot
@@ -24,6 +24,7 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ServerValue
 import com.google.firebase.database.ValueEventListener
+import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -40,7 +41,8 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
     private val database: FirebaseDatabase,
     private val authManager: FirebaseAuthManager,
     private val matchmakingRepository: MatchmakingRepository,
-    private val mapper: GameSyncMapper
+    private val mapper: GameSyncMapper,
+    private val functions: FirebaseFunctions,
 ) : FirebaseMatchRepository {
 
     private var lastShotTimestampMs: Long = 0L
@@ -190,89 +192,68 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
             val playerRef = database.getReference("${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.PLAYERS}/$myUid")
             playerRef.child(FirebaseSchema.PLAYER_CONNECTED).setValue(connected).await()
             playerRef.child(FirebaseSchema.PLAYER_LAST_SEEN).setValue(ServerValue.TIMESTAMP).await()
-        } catch (e: Exception) {}
+        } catch (_: Exception) {}
     }
+
+    // ── Server-side operations via Cloud Functions ───────────────────────────
 
     override suspend fun claimVictory(gameId: String): Result<Unit> {
-        val myUid = authManager.currentUid ?: return Result.failure(Exception("Not authenticated"))
         return try {
-            val metaRef = database.getReference("${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.META}")
-            metaRef.child(FirebaseSchema.WINNER).setValue(myUid).await()
-            metaRef.child(FirebaseSchema.STATUS).setValue(FirebaseSchema.STATUS_FINISHED).await()
+            functions.getHttpsCallable("claimVictory")
+                .call(mapOf("gameId" to gameId))
+                .await()
             Result.success(Unit)
         } catch (e: Exception) {
+            Timber.w(e, "claimVictory Cloud Function failed for game=$gameId")
             Result.failure(e)
         }
     }
 
-    override suspend fun forfeit(gameId: String, opponentUid: String): Result<Unit> {
+    override suspend fun forfeit(gameId: String): Result<Unit> {
         return try {
-            val metaRef = database.getReference("${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.META}")
-            metaRef.child(FirebaseSchema.WINNER).setValue(opponentUid).await()
-            metaRef.child(FirebaseSchema.STATUS).setValue(FirebaseSchema.STATUS_FINISHED).await()
+            functions.getHttpsCallable("forfeit")
+                .call(mapOf("gameId" to gameId))
+                .await()
             Result.success(Unit)
         } catch (e: Exception) {
+            Timber.w(e, "forfeit Cloud Function failed for game=$gameId")
             Result.failure(e)
         }
     }
 
-    override suspend fun writeShotResult(
+    override suspend fun resolveShotServerSide(
         gameId: String,
         shooterUid: String,
         shotIndex: Int,
-        result: FireResult,
-        shipId: String?,
-    ) {
-        try {
-            val shotsRef = database.getReference("${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.SHOTS}/$shooterUid")
-            val snapshot = shotsRef.get().await()
-            val pushKey = snapshot.children.elementAtOrNull(shotIndex)?.key ?: return
-
-            val shotNode = shotsRef.child(pushKey)
-            // Discrete setValue calls avoid the multi-path updateChildren null/delete rule bug
-            shotNode.child(FirebaseSchema.SHOT_RESULT).setValue(result.toSchemaString()).await()
-            if (shipId != null) {
-                shotNode.child(FirebaseSchema.SHOT_SHIP_ID).setValue(shipId).await()
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "writeShotResult failed for game=$gameId shooter=$shooterUid index=$shotIndex")
-        }
-    }
-
-    override suspend fun commitShotAndFlipTurn(
-        gameId: String,
-        shooterUid: String,
-        shotIndex: Int,
-        result: FireResult,
-        shipId: String?,
-        nextTurnUid: String,
-    ): Result<Unit> {
+        row: Int,
+        col: Int,
+    ): Result<ShotResolutionResult> {
         return try {
-            val shotsRef = database.getReference(
-                "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.SHOTS}/$shooterUid"
+            val data = mapOf(
+                "gameId"     to gameId,
+                "shooterUid" to shooterUid,
+                "shotIndex"  to shotIndex,
+                "row"        to row,
+                "col"        to col,
             )
-            val snapshot = shotsRef.get().await()
-            val pushKey = snapshot.children.elementAtOrNull(shotIndex)?.key
-                ?: return Result.failure(Exception("Shot push-key not found at index $shotIndex"))
+            val result = functions.getHttpsCallable("resolveShot")
+                .call(data)
+                .await()
 
-            val shotNodeRef = shotsRef.child(pushKey)
-            
-            // ── Step 1: Write result ─────────────────────────────────────────
-            shotNodeRef.child(FirebaseSchema.SHOT_RESULT).setValue(result.toSchemaString()).await()
+            @Suppress("UNCHECKED_CAST")
+            val resultMap = result.data as? Map<String, Any?> ?: return Result.failure(Exception("Invalid response"))
+            val resultStr = resultMap["result"] as? String ?: return Result.failure(Exception("Missing result"))
+            val shipId = resultMap["shipId"] as? String
 
-            // ── Step 2: Write shipId ONLY if not null ────────────────────────
-            if (shipId != null) {
-                shotNodeRef.child(FirebaseSchema.SHOT_SHIP_ID).setValue(shipId).await()
+            val fireResult = when (resultStr) {
+                "hit"  -> FireResult.HIT
+                "sunk" -> FireResult.SUNK
+                else   -> FireResult.MISS
             }
 
-            // ── Step 3: Flip currentTurn to the defender ─────────────────────
-            database.getReference(
-                "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.META}/${FirebaseSchema.CURRENT_TURN}"
-            ).setValue(nextTurnUid).await()
-
-            Result.success(Unit)
+            Result.success(ShotResolutionResult(fireResult, shipId))
         } catch (e: Exception) {
-            Timber.w(e, "commitShotAndFlipTurn failed game=$gameId shooter=$shooterUid index=$shotIndex")
+            Timber.w(e, "resolveShot Cloud Function failed for game=$gameId shooter=$shooterUid index=$shotIndex")
             Result.failure(e)
         }
     }

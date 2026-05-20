@@ -38,6 +38,16 @@ object DataStoreKeys {
      * The Firebase anonymous UID for this device.
      * Written once on first anonymous sign-in; persists across sessions.
      * Section 6.1.
+     *
+     * NOTE: The actual UID value is now stored in EncryptedSharedPreferences
+     * (see PreferencesRepositoryImpl). This key is retained for backward
+     * compatibility during migration only.
      */
     val ONLINE_PLAYER_UID = stringPreferencesKey("online_player_uid")
+
+    /**
+     * Whether the user has consented to analytics data collection.
+     * Default is false (collection disabled). Must be explicitly opted in.
+     */
+    val ANALYTICS_CONSENT = booleanPreferencesKey("analytics_consent")
 }

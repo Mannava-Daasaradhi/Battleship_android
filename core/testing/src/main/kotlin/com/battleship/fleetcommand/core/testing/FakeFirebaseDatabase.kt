@@ -11,6 +11,7 @@ import com.battleship.fleetcommand.core.domain.multiplayer.JoinResult
 import com.battleship.fleetcommand.core.domain.multiplayer.OnlineGameState
 import com.battleship.fleetcommand.core.domain.multiplayer.PlayerData
 import com.battleship.fleetcommand.core.domain.multiplayer.ShotData
+import com.battleship.fleetcommand.core.domain.multiplayer.ShotResolutionResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
@@ -40,9 +41,9 @@ class FakeFirebaseDatabase : FirebaseMatchRepository {
         var currentTurn: String = "",
         var winner: String? = null,
         val players: MutableMap<String, PlayerNode> = mutableMapOf(),
-        // shots keyed by shooterUid → ordered list
         val shots: MutableMap<String, MutableList<ShotNode>> = mutableMapOf(),
-        val ships: MutableMap<String, String> = mutableMapOf()
+        val ships: MutableMap<String, String> = mutableMapOf(),
+        val placements: MutableMap<String, List<ShipPlacement>> = mutableMapOf()
     )
 
     private data class PlayerNode(
@@ -53,7 +54,7 @@ class FakeFirebaseDatabase : FirebaseMatchRepository {
     )
 
     private data class ShotNode(
-        val index: Int,          // sequential index within this shooter's list
+        val index: Int,
         val row: Int,
         val col: Int,
         var result: FireResult? = null,
@@ -91,23 +92,19 @@ class FakeFirebaseDatabase : FirebaseMatchRepository {
         when {
             node == null -> emit(JoinResult.NotFound)
 
-            // Idempotent re-join: the guest is already us (e.g. retry after network blip).
             node.guestUid == myUid -> {
-                // Just refresh player data and re-emit success.
                 node.players[myUid] = PlayerNode(name = playerName)
                 stateFlows[node.gameId]?.value = node
                 emit(JoinResult.Success(gameId = node.gameId))
             }
 
-            // Another guest is already in the slot, or game is not in a joinable state.
             node.guestUid != null -> emit(JoinResult.GameAlreadyStarted)
             node.status != "waiting" -> emit(JoinResult.GameAlreadyStarted)
 
             else -> {
-                // Claim the guest slot and advance status waiting → setup.
                 node.guestUid = myUid
                 node.players[myUid] = PlayerNode(name = playerName)
-                node.status = "setup"   // mirrors MatchmakingRepository.joinGame Step 7
+                node.status = "setup"
                 stateFlows[node.gameId]?.value = node
                 emit(JoinResult.Success(gameId = node.gameId))
             }
@@ -124,11 +121,10 @@ class FakeFirebaseDatabase : FirebaseMatchRepository {
         ships: List<ShipPlacement>
     ): Result<Unit> {
         val node = games[gameId] ?: return Result.failure(Exception("Game not found: $gameId"))
-        node.ships[myUid] = ships.size.toString() // simplified — just record it was submitted
+        node.ships[myUid] = ships.size.toString()
+        node.placements[myUid] = ships
         node.players[myUid]?.ready = true
 
-        // Advance status "setup" → "battle" when both players are ready.
-        // Mirrors FirebaseMatchRepositoryImpl.submitShipPlacement ready-check logic.
         if (node.status == "setup" &&
             node.players.size >= 2 &&
             node.players.values.all { it.ready }
@@ -149,7 +145,6 @@ class FakeFirebaseDatabase : FirebaseMatchRepository {
         return Result.success(Unit)
     }
 
-    // Returns Flow<List<ShotData>> — matches the real interface signature.
     override fun observeOpponentShots(gameId: String): Flow<List<ShotData>> {
         val sf = stateFlows.getOrPut(gameId) { MutableStateFlow(games[gameId]) }
         return sf.mapNotNull { node ->
@@ -175,26 +170,72 @@ class FakeFirebaseDatabase : FirebaseMatchRepository {
         return Result.success(Unit)
     }
 
-    /**
-     * Implements forfeit: the forfeiting player concedes, so [opponentUid] is declared winner.
-     * Signature matches [FirebaseMatchRepository.forfeit] exactly:
-     *   forfeit(gameId: String, opponentUid: String)
-     */
-    override suspend fun forfeit(gameId: String, opponentUid: String): Result<Unit> {
+    override suspend fun forfeit(gameId: String): Result<Unit> {
         val node = games[gameId] ?: return Result.failure(Exception("Game not found: $gameId"))
+        val opponentUid = if (node.hostUid == myUid) node.guestUid else node.hostUid
         node.winner = opponentUid
         node.status = "finished"
         stateFlows[gameId]?.value = node
         return Result.success(Unit)
     }
 
-    /**
-     * Updated to accept the optional [shipId] param added to the interface.
-     * Writes both the result and the shipId so sunk-ship detection works in tests.
-     * Signature matches [FirebaseMatchRepository.writeShotResult] exactly:
-     *   writeShotResult(gameId, shooterUid, shotIndex, result, shipId?)
-     */
-    override suspend fun writeShotResult(
+    override suspend fun resolveShotServerSide(
+        gameId: String,
+        shooterUid: String,
+        shotIndex: Int,
+        row: Int,
+        col: Int,
+    ): Result<ShotResolutionResult> {
+        val node = games[gameId]
+            ?: return Result.failure(Exception("Game not found: $gameId"))
+        val defenderPlacements = node.placements[myUid]
+            ?: return Result.failure(Exception("No placements for defender $myUid"))
+
+        val shot = node.shots[shooterUid]?.getOrNull(shotIndex)
+            ?: return Result.failure(Exception("Shot not found at index $shotIndex"))
+
+        val coord = Coord.fromRowCol(row, col)
+
+        // Gather previous hit coords from this shooter
+        val previousHitCoords = node.shots[shooterUid]
+            ?.take(shotIndex)
+            ?.filter { it.result == FireResult.HIT || it.result == FireResult.SUNK }
+            ?.map { Coord.fromRowCol(it.row, it.col) }
+            ?.toSet() ?: emptySet()
+
+        var fireResult = FireResult.MISS
+        var shipIdStr: String? = null
+
+        for (placement in defenderPlacements) {
+            val occupied = placement.occupiedCoords()
+            if (coord in occupied) {
+                val allOtherHit = occupied.all { c -> c == coord || c in previousHitCoords }
+                fireResult = if (allOtherHit) FireResult.SUNK else FireResult.HIT
+                shipIdStr = placement.shipId.name
+                break
+            }
+        }
+
+        shot.result = fireResult
+        shot.shipId = shipIdStr
+        node.currentTurn = myUid // defender's turn next
+        stateFlows[gameId]?.value = node
+
+        return Result.success(ShotResolutionResult(fireResult, shipIdStr))
+    }
+
+    override suspend fun flipTurn(gameId: String, nextPlayerUid: String): Result<Unit> {
+        val node = games[gameId]
+            ?: return Result.failure(Exception("flipTurn: game not found: $gameId"))
+        node.currentTurn = nextPlayerUid
+        stateFlows[gameId]?.value = node
+        return Result.success(Unit)
+    }
+
+    // ── Test helpers ──────────────────────────────────────────────────────────
+
+    /** Directly writes a shot result — useful for attacker-side tests. */
+    fun writeShotResult(
         gameId: String,
         shooterUid: String,
         shotIndex: Int,
@@ -207,50 +248,6 @@ class FakeFirebaseDatabase : FirebaseMatchRepository {
         shot.shipId = shipId
         stateFlows[gameId]?.value = node
     }
-
-    /**
-     * Updates [currentTurn] to [nextPlayerUid] and emits on the state flow so that
-     * both [observeGameState] subscribers see the updated turn immediately.
-     * Mirrors [FirebaseMatchRepositoryImpl.flipTurn].
-     */
-    override suspend fun flipTurn(gameId: String, nextPlayerUid: String): Result<Unit> {
-        val node = games[gameId]
-            ?: return Result.failure(Exception("flipTurn: game not found: $gameId"))
-        node.currentTurn = nextPlayerUid
-        stateFlows[gameId]?.value = node
-        return Result.success(Unit)
-    }
-
-    /**
-     * Atomically writes result + shipId + turn flip in a SINGLE state-flow emission.
-     * Mirrors [FirebaseMatchRepositoryImpl.commitShotAndFlipTurn].
-     *
-     * In the real impl this is a single Firebase updateChildren() call.
-     * In the fake we replicate the atomicity by updating all fields before
-     * emitting on the StateFlow so test observers never see a partial state.
-     */
-    override suspend fun commitShotAndFlipTurn(
-        gameId: String,
-        shooterUid: String,
-        shotIndex: Int,
-        result: FireResult,
-        shipId: String?,
-        nextTurnUid: String,
-    ): Result<Unit> {
-        val node = games[gameId]
-            ?: return Result.failure(Exception("commitShotAndFlipTurn: game not found: $gameId"))
-        val shot = node.shots[shooterUid]?.getOrNull(shotIndex)
-            ?: return Result.failure(Exception("commitShotAndFlipTurn: shot not found at index $shotIndex"))
-        // Write all three fields before emitting — single observer event, no partial state
-        shot.result      = result
-        shot.shipId      = shipId
-        node.currentTurn = nextTurnUid
-        stateFlows[gameId]?.value = node
-        return Result.success(Unit)
-    }
-
-
-    // ── Test helpers ──────────────────────────────────────────────────────────
 
     /** Injects a shot from the opponent into the game; triggers [observeOpponentShots]. */
     fun simulateOpponentShot(gameId: String, coord: Coord) {
@@ -276,10 +273,6 @@ class FakeFirebaseDatabase : FirebaseMatchRepository {
         stateFlows[gameId]?.value = node
     }
 
-    /**
-     * Returns raw game metadata as a plain map — useful for structural assertions.
-     * Keys: gameId, roomCode, hostUid, guestUid, status, currentTurn, winner.
-     */
     fun getGame(gameId: String): Map<String, Any?>? {
         val node = games[gameId] ?: return null
         return mapOf(

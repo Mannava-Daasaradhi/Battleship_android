@@ -13,6 +13,7 @@ import com.battleship.fleetcommand.core.domain.ship.ShipId
 import com.battleship.fleetcommand.core.domain.ship.ShipPlacement
 import com.battleship.fleetcommand.core.testing.FakeFirebaseDatabase
 import com.battleship.fleetcommand.core.testing.FakeGameRepository
+import com.battleship.fleetcommand.core.testing.FakeStatsRepository
 import com.battleship.fleetcommand.core.testing.MainDispatcherRule
 import com.battleship.fleetcommand.core.ui.haptic.HapticManager
 import com.battleship.fleetcommand.core.ui.model.CellDisplayState
@@ -72,12 +73,14 @@ class OnlineGameViewModelTest {
     // ── Fakes ─────────────────────────────────────────────────────────────────
     private lateinit var fakeFirebase: FakeFirebaseDatabase
     private lateinit var fakeRoom:     FakeGameRepository
+    private lateinit var fakeStats:    FakeStatsRepository
     private lateinit var haptic:       HapticManager
 
     @BeforeEach
     fun setUp() {
         fakeFirebase = FakeFirebaseDatabase().also { it.myUid = myUid }
         fakeRoom     = FakeGameRepository()
+        fakeStats    = FakeStatsRepository()
         haptic       = mockk(relaxed = true)
     }
 
@@ -90,7 +93,7 @@ class OnlineGameViewModelTest {
         OnlineGameViewModel(
             repository       = fakeFirebase,
             gameRepository   = fakeRoom,
-            gameEngine       = GameEngine(),
+            statsRepository  = fakeStats,
             savedStateHandle = savedState(gameId, uid),
             hapticManager    = haptic,
         )
@@ -475,7 +478,7 @@ class OnlineGameViewModelTest {
          * then the defender resolves and writes the result back.
          * This mirrors the real async round-trip:
          *   1. I call fireShot → shot written to Firebase with result=null
-         *   2. Defender's VM resolves → writeShotResult called with result + shipId
+         *   2. Defender resolves via Cloud Function (faked via writeShotResult test helper)
          */
         private suspend fun simulateMyShot(
             gameId: String,

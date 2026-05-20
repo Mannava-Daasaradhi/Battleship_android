@@ -23,9 +23,7 @@ class GameStateMachine(
     }
 
     private object DefaultLogger : Logger {
-        override fun warn(message: String) {
-            println("GameStateMachine WARNING: $message")
-        }
+        override fun warn(message: String) { /* no-op in production */ }
     }
 
     // ── State ─────────────────────────────────────────────────────────────

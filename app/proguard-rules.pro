@@ -67,9 +67,13 @@
 -keep class com.jakewharton.timber.** { *; }
 -dontwarn org.jetbrains.annotations.**
 
-# ── Domain models (Firebase + Serialization must survive) ─────────────────
--keep class com.battleship.fleetcommand.core.domain.** { *; }
--keepclassmembers class com.battleship.fleetcommand.core.domain.** { *; }
+# ── Domain models — only keep @Serializable classes for Firebase/serialization ──
+-keep @kotlinx.serialization.Serializable class com.battleship.fleetcommand.core.domain.** { *; }
+-keepclassmembers class com.battleship.fleetcommand.core.domain.engine.FireResult { *; }
+-keepclassmembers class com.battleship.fleetcommand.core.domain.ship.ShipId { *; }
+-keepclassmembers class com.battleship.fleetcommand.core.domain.model.GameMode { *; }
+-keepclassmembers class com.battleship.fleetcommand.core.domain.player.Difficulty { *; }
+-keepclassmembers class com.battleship.fleetcommand.core.domain.player.PlayerSlot { *; }
 
 # ── Navigation routes ─────────────────────────────────────────────────────
 -keep class com.battleship.fleetcommand.navigation.** { *; }
@@ -99,11 +103,13 @@
 -dontwarn okhttp3.**
 -dontwarn okio.**
 
-# ── Strip Timber debug/verbose logs in release ────────────────────────────
+# ── Strip ALL Timber logs in release ────────────────────────────────────
 -assumenosideeffects class timber.log.Timber {
     public static *** v(...);
     public static *** d(...);
     public static *** i(...);
+    public static *** w(...);
+    public static *** e(...);
 }
 
 # ── Enums ─────────────────────────────────────────────────────────────────

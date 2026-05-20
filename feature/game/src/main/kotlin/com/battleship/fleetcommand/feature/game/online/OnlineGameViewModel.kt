@@ -9,8 +9,6 @@ import androidx.navigation.toRoute
 import com.battleship.fleetcommand.core.domain.Coord
 import com.battleship.fleetcommand.core.domain.GameConstants
 import com.battleship.fleetcommand.core.domain.engine.FireResult
-import com.battleship.fleetcommand.core.domain.engine.GameEngine
-import com.battleship.fleetcommand.core.domain.engine.ShotOutcome
 import com.battleship.fleetcommand.core.domain.model.GameMode
 import com.battleship.fleetcommand.core.domain.model.GameResult
 import com.battleship.fleetcommand.core.domain.multiplayer.FirebaseMatchRepository
@@ -49,7 +47,6 @@ class OnlineGameViewModel @Inject constructor(
     private val repository: FirebaseMatchRepository,
     private val gameRepository: GameRepository,
     private val statsRepository: StatsRepository,
-    private val gameEngine: GameEngine,
     private val savedStateHandle: SavedStateHandle,
     private val hapticManager: HapticManager,
 ) : ViewModel() {
@@ -341,53 +338,34 @@ class OnlineGameViewModel @Inject constructor(
     private suspend fun resolveNewOpponentShots(shots: List<ShotData>) {
         shots.forEachIndexed { index, shotData ->
             if (shotData.result != null) return@forEachIndexed
-            
+
             val key = "$index-${shotData.row}-${shotData.col}"
             if (key in resolvedShotKeys) return@forEachIndexed
             resolvedShotKeys.add(key)
 
-            val coord = Coord.fromRowCol(shotData.row, shotData.col)
-
-            val alreadyShotCoords = shots.take(index).map { it.coord }.toSet()
-            val outcome: ShotOutcome = gameEngine.fireShot(coord, myPlacements, alreadyShotCoords)
-                .getOrElse { ShotOutcome.Miss }
-
-            val fireResult = when (outcome) {
-                is ShotOutcome.Hit  -> FireResult.HIT
-                is ShotOutcome.Sunk -> FireResult.SUNK
-                is ShotOutcome.Miss -> FireResult.MISS
-            }
-
-            val shipIdString: String? = when (outcome) {
-                is ShotOutcome.Hit  -> outcome.shipId.name
-                is ShotOutcome.Sunk -> outcome.shipId.name
-                is ShotOutcome.Miss -> null
-            }
-
-            val commitResult = repository.commitShotAndFlipTurn(
-                gameId      = gameId,
-                shooterUid  = opponentUid,
-                shotIndex   = index,
-                result      = fireResult,
-                shipId      = shipIdString,
-                nextTurnUid = myUid,
+            val resolution = repository.resolveShotServerSide(
+                gameId     = gameId,
+                shooterUid = opponentUid,
+                shotIndex  = index,
+                row        = shotData.row,
+                col        = shotData.col,
             )
 
-            // CRITICAL FIX: If the write fails, we must remove it from the set so it 
-            // can be retried on the next snapshot, otherwise the game locks permanently.
-            if (commitResult.isFailure) {
+            if (resolution.isFailure) {
                 resolvedShotKeys.remove(key)
-                Timber.e(commitResult.exceptionOrNull(), "commitShotAndFlipTurn failed for key: $key")
+                Timber.e(resolution.exceptionOrNull(), "resolveShotServerSide failed for key: $key")
                 return@forEachIndexed
             }
 
-            when (fireResult) {
+            val result = resolution.getOrNull() ?: return@forEachIndexed
+
+            when (result.result) {
                 FireResult.HIT  -> hapticManager.perform(HapticEvent.HIT)
                 FireResult.MISS -> hapticManager.perform(HapticEvent.MISS)
                 FireResult.SUNK -> {
                     if (defenderSunkHapticFiredFor.add(key)) {
                         hapticManager.perform(HapticEvent.SHIP_SUNK)
-                        val shipDisplayName = (shipIdString ?: "Ship")
+                        val shipDisplayName = (result.shipId ?: "Ship")
                             .lowercase().replaceFirstChar { it.uppercase() }
                         _uiState.update {
                             it.copy(sunkNotificationMessage = "Your $shipDisplayName was sunk!")
@@ -418,7 +396,7 @@ class OnlineGameViewModel @Inject constructor(
         if (navigatedToGameOver) return
         _uiState.update { it.copy(isMyTurn = false) }
         viewModelScope.launch {
-            repository.forfeit(gameId, opponentUid)
+            repository.forfeit(gameId)
         }
     }
 

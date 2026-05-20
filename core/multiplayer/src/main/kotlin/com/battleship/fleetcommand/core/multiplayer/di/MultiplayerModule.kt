@@ -4,6 +4,7 @@ package com.battleship.fleetcommand.core.multiplayer.di
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.functions.FirebaseFunctions
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -21,6 +22,10 @@ object MultiplayerModule {
     @Provides
     @Singleton
     fun provideFirebaseAuth(): FirebaseAuth = FirebaseAuth.getInstance()
+
+    @Provides
+    @Singleton
+    fun provideFirebaseFunctions(): FirebaseFunctions = FirebaseFunctions.getInstance()
 
     // NOTE: FirebaseMatchRepositoryImpl is bound in :app's RepositoryModule via @Binds.
     // Do NOT rebind it here — that would create a duplicate binding and fail the Hilt graph.
