@@ -18,6 +18,7 @@ import com.battleship.fleetcommand.core.domain.repository.GameRepository
 import com.battleship.fleetcommand.core.domain.ship.ShipId
 import com.battleship.fleetcommand.core.domain.ship.ShipPlacement
 import com.battleship.fleetcommand.core.domain.ship.ShipRegistry
+import com.battleship.fleetcommand.core.ui.model.BoardBuilder
 import com.battleship.fleetcommand.core.ui.model.BoardViewState
 import com.battleship.fleetcommand.core.ui.model.CellDisplayState
 import com.battleship.fleetcommand.core.ui.model.CellViewState
@@ -61,8 +62,8 @@ class BattleViewModel @Inject constructor(
         val gamePhase: GamePhase = GamePhase.BATTLE,
         val myName: String = "Player",
         val opponentName: String = "AI",
-        val shotCount: Int = 0,      // player shots fired
-        val aiShotCount: Int = 0,    // AI / opponent shots fired
+        val shotCount: Int = 0,
+        val aiShotCount: Int = 0,
         val hitCount: Int = 0,
         val isAiThinking: Boolean = false,
     )
@@ -190,7 +191,6 @@ class BattleViewModel @Inject constructor(
     }
 
     private fun resumePassAndPlayTurn(p1JustFired: Boolean) {
-        // If game is over, the Hand-off was just to give the device to the loser. Now route to the new P&P Game Over screen.
         if (_uiState.value.gamePhase == GamePhase.GAME_OVER) {
             val winnerName = if (p1JustFired) p1Name else p2Name
             viewModelScope.launch {
@@ -382,9 +382,11 @@ class BattleViewModel @Inject constructor(
         }
     }
 
+    // ── CHANGED: delegates to shared BoardBuilder ──
+
     private fun refreshBoards() {
-        val myBoard = buildPlayerBoard(myPlacements, aiShotHistory, showShips = true)
-        val opponentBoard = buildFogBoard(aiPlacements, myShotHistory)
+        val myBoard = BoardBuilder.buildPlayerBoard(myPlacements, aiShotHistory, showShips = true)
+        val opponentBoard = BoardBuilder.buildFogBoard(aiPlacements, myShotHistory)
         _uiState.update { it.copy(myBoard = myBoard, opponentBoard = opponentBoard) }
     }
 
@@ -393,44 +395,8 @@ class BattleViewModel @Inject constructor(
         val incomingShots = if (isP1ActiveTurn) p2ShotHistory else p1ShotHistory
         val activePlacements   = if (isP1ActiveTurn) p1Placements else p2Placements
         val opponentPlacements = if (isP1ActiveTurn) p2Placements else p1Placements
-        val myBoard       = buildPlayerBoard(activePlacements, incomingShots, showShips = true)
-        val opponentBoard = buildFogBoard(opponentPlacements, activeShots)
+        val myBoard       = BoardBuilder.buildPlayerBoard(activePlacements, incomingShots, showShips = true)
+        val opponentBoard = BoardBuilder.buildFogBoard(opponentPlacements, activeShots)
         _uiState.update { it.copy(myBoard = myBoard, opponentBoard = opponentBoard) }
-    }
-
-    private fun buildPlayerBoard(placements: List<ShipPlacement>, incomingShots: Set<Coord>, showShips: Boolean): BoardViewState {
-        val cells = Array(GameConstants.TOTAL_CELLS) { CellDisplayState.WATER }
-        if (showShips) {
-            for (p in placements) {
-                for (c in p.occupiedCoords()) if (c.isValid()) cells[c.index] = CellDisplayState.SHIP
-            }
-        }
-        for (shot in incomingShots) {
-            if (!shot.isValid()) continue
-            val hit = placements.any { shot in it.occupiedCoords() }
-            cells[shot.index] = if (hit) CellDisplayState.HIT else CellDisplayState.MISS
-        }
-        val sunkShipIds = placements.filter { p -> p.occupiedCoords().all { it in incomingShots } }.map { it.shipId }.toSet()
-        for (p in placements.filter { it.shipId in sunkShipIds }) {
-            for (c in p.occupiedCoords()) if (c.isValid()) cells[c.index] = CellDisplayState.SUNK
-        }
-        val cellViews = cells.mapIndexed { i, s -> CellViewState(Coord(i), s) }.toImmutableList()
-        val shipViews = placements.map { p -> ShipPlacementViewState(p.shipId, p.headCoord, p.orientation, ShipRegistry.sizeOf(p.shipId), p.shipId in sunkShipIds) }.toImmutableList()
-        return BoardViewState(cells = cellViews, ownShips = shipViews)
-    }
-
-    private fun buildFogBoard(placements: List<ShipPlacement>, shots: Set<Coord>): BoardViewState {
-        val cells = Array(GameConstants.TOTAL_CELLS) { CellDisplayState.WATER }
-        for (shot in shots) {
-            if (!shot.isValid()) continue
-            val hit = placements.any { shot in it.occupiedCoords() }
-            cells[shot.index] = if (hit) CellDisplayState.HIT else CellDisplayState.MISS
-        }
-        val sunkShipIds = placements.filter { p -> p.occupiedCoords().all { it in shots } }.map { it.shipId }.toSet()
-        for (p in placements.filter { it.shipId in sunkShipIds }) {
-            for (c in p.occupiedCoords()) if (c.isValid()) cells[c.index] = CellDisplayState.SUNK
-        }
-        val cellViews = cells.mapIndexed { i, s -> CellViewState(Coord(i), s) }.toImmutableList()
-        return BoardViewState(cells = cellViews)
     }
 }

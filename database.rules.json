@@ -12,6 +12,7 @@
           data.child('meta/hostUid').val() === auth.uid ||
           data.child('meta/guestUid').val() === auth.uid
         )",
+        ".write": "auth != null && !data.exists() && newData.child('meta/hostUid').val() === auth.uid",
         "meta": {
           "hostUid": {
             ".write": "auth != null && !data.exists()"

@@ -74,6 +74,7 @@ import com.battleship.fleetcommand.core.ui.theme.InvalidRed
 import com.battleship.fleetcommand.core.ui.theme.NavyBackground
 import com.battleship.fleetcommand.core.ui.theme.NavyPrimary
 import com.battleship.fleetcommand.core.ui.theme.NavySurface
+import com.battleship.fleetcommand.core.ui.theme.ShipColors
 import com.battleship.fleetcommand.core.ui.theme.ValidGreen
 import com.battleship.fleetcommand.navigation.BattleRoute
 import com.battleship.fleetcommand.navigation.HandOffRoute
@@ -257,7 +258,6 @@ fun ShipPlacementScreen(
                     },
                 )
 
-                // ── The new 3-button layout ──
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -312,6 +312,7 @@ fun ShipPlacementScreen(
                 val orientation = uiState.orientations[ghostId] ?: Orientation.Horizontal
                 if (ship != null) {
                     FloatingShipGhost(
+                        shipId           = ghostId,
                         shipSize         = ship.size,
                         orientation      = orientation,
                         absOffset        = dragOffset,
@@ -326,7 +327,7 @@ fun ShipPlacementScreen(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PlacementGridWithDrag
+// PlacementGridWithDrag — CHANGED: per-ship cell colours
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -385,10 +386,13 @@ private fun PlacementGridWithDrag(
                             }
                         } == true
 
+                        // ── CHANGED: per-ship hull colour ──
+                        val shipHullColor = cellState?.shipId?.let { ShipColors.hullColor(it) } ?: NavyPrimary
+
                         val bgColor = when {
                             isHovered && isHoverValid  -> ValidGreen.copy(alpha = 0.6f)
                             isHovered && !isHoverValid -> InvalidRed.copy(alpha = 0.6f)
-                            isShip                     -> NavyPrimary
+                            isShip                     -> shipHullColor
                             else                       -> NavySurface
                         }
                         val animatedBg by animateColorAsState(
@@ -397,15 +401,19 @@ private fun PlacementGridWithDrag(
                             label         = "cellBg$row$col",
                         )
 
+                        // ── CHANGED: selected-ship border uses accent colour ──
+                        val selectedBorderColor = if (isSelectedShipHere) {
+                            uiState.selectedShipId?.let { ShipColors.accentColor(it) }
+                                ?: MaterialTheme.colorScheme.primary
+                        } else GridLine
+
                         Box(
                             modifier = Modifier
                                 .size(cellSizeDp)
                                 .background(animatedBg)
                                 .border(
                                     width = if (isSelectedShipHere) 2.dp else 0.5.dp,
-                                    color = if (isSelectedShipHere)
-                                        MaterialTheme.colorScheme.primary
-                                    else GridLine,
+                                    color = selectedBorderColor,
                                 )
                                 .clickable { onTapCell(coord) }
                         )
@@ -417,11 +425,12 @@ private fun PlacementGridWithDrag(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FloatingShipGhost
+// FloatingShipGhost — CHANGED: per-ship hull colour
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
 private fun FloatingShipGhost(
+    shipId: ShipId,
     shipSize: Int,
     orientation: Orientation,
     absOffset: Offset,
@@ -438,6 +447,10 @@ private fun FloatingShipGhost(
     val ghostX = absOffset.x - containerTopLeft.x - ghostWidthPx / 2f
     val ghostY = absOffset.y - containerTopLeft.y - ghostHeightPx / 2f
 
+    // ── CHANGED: use per-ship hull colour ──
+    val hullColor = ShipColors.hullColor(shipId)
+    val accentColor = ShipColors.accentColor(shipId)
+
     Box(
         modifier = Modifier
             .offset { IntOffset(ghostX.toInt(), ghostY.toInt()) }
@@ -449,8 +462,8 @@ private fun FloatingShipGhost(
                     Box(
                         Modifier
                             .size(cellDp)
-                            .background(NavyPrimary, RoundedCornerShape(3.dp))
-                            .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(3.dp))
+                            .background(hullColor, RoundedCornerShape(3.dp))
+                            .border(1.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(3.dp))
                     )
                 }
             }
@@ -460,8 +473,8 @@ private fun FloatingShipGhost(
                     Box(
                         Modifier
                             .size(cellDp)
-                            .background(NavyPrimary, RoundedCornerShape(3.dp))
-                            .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(3.dp))
+                            .background(hullColor, RoundedCornerShape(3.dp))
+                            .border(1.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(3.dp))
                     )
                 }
             }
@@ -470,7 +483,7 @@ private fun FloatingShipGhost(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ShipSelectionTray
+// ShipSelectionTray — CHANGED: per-ship accent/hull colours
 // ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
@@ -501,10 +514,13 @@ private fun ShipSelectionTray(
                 val isDragging  = currentDragShipId == shipDef.id
                 val orientation = uiState.orientations[shipDef.id] ?: Orientation.Horizontal
 
+                // ── CHANGED: per-ship colours ──
+                val palette = ShipColors.forShip(shipDef.id)
+
                 val borderColor by animateColorAsState(
                     targetValue = when {
-                        isDragging -> MaterialTheme.colorScheme.primary
-                        isSelected -> MaterialTheme.colorScheme.primary
+                        isDragging -> palette.accent
+                        isSelected -> palette.accent
                         isPlaced   -> ValidGreen
                         else       -> MaterialTheme.colorScheme.outline
                     },
@@ -531,8 +547,8 @@ private fun ShipSelectionTray(
                         )
                         .background(
                             color = when {
-                                isDragging -> MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                                isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                isDragging -> palette.hull.copy(alpha = 0.3f)
+                                isSelected -> palette.hull.copy(alpha = 0.2f)
                                 isPlaced   -> ValidGreen.copy(alpha = 0.1f)
                                 else       -> MaterialTheme.colorScheme.surface
                             },
@@ -603,7 +619,7 @@ private fun ShipSelectionTray(
                     Text(
                         text       = shipDef.name,
                         style      = MaterialTheme.typography.labelSmall,
-                        color      = if (isPlaced) ValidGreen else MaterialTheme.colorScheme.onSurface,
+                        color      = if (isPlaced) ValidGreen else palette.accent,
                         fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                     )
 
@@ -617,8 +633,8 @@ private fun ShipSelectionTray(
                                         .background(
                                             color = when {
                                                 isPlaced   -> ValidGreen
-                                                isSelected -> MaterialTheme.colorScheme.primary
-                                                else       -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                                isSelected -> palette.hull
+                                                else       -> palette.hull.copy(alpha = 0.4f)
                                             },
                                             shape = RoundedCornerShape(2.dp),
                                         )
@@ -634,8 +650,8 @@ private fun ShipSelectionTray(
                                         .background(
                                             color = when {
                                                 isPlaced   -> ValidGreen
-                                                isSelected -> MaterialTheme.colorScheme.primary
-                                                else       -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                                isSelected -> palette.hull
+                                                else       -> palette.hull.copy(alpha = 0.4f)
                                             },
                                             shape = RoundedCornerShape(2.dp),
                                         )
@@ -644,7 +660,6 @@ private fun ShipSelectionTray(
                         }
                     }
 
-                    // Kept just the H/V indicator without the tiny button
                     Text(
                         text  = if (orientation is Orientation.Horizontal) "Horizontal" else "Vertical",
                         style = MaterialTheme.typography.labelSmall,

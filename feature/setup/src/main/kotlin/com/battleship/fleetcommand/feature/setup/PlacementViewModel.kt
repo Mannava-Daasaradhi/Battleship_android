@@ -20,6 +20,7 @@ import com.battleship.fleetcommand.core.domain.ship.PlacementValidator
 import com.battleship.fleetcommand.core.domain.ship.ShipId
 import com.battleship.fleetcommand.core.domain.ship.ShipPlacement
 import com.battleship.fleetcommand.core.domain.ship.ShipRegistry
+import com.battleship.fleetcommand.core.ui.model.BoardBuilder
 import com.battleship.fleetcommand.core.ui.model.BoardViewState
 import com.battleship.fleetcommand.core.ui.model.CellDisplayState
 import com.battleship.fleetcommand.core.ui.model.CellViewState
@@ -152,8 +153,6 @@ class PlacementViewModel @Inject constructor(
 
     private fun hoverShip(shipId: ShipId, coord: Coord) {
         if (!coord.isValid()) {
-            // sentinel coord means the finger left the grid — clear hover highlights
-            // but do NOT clear draggingShipId (the ghost should keep rendering).
             _uiState.update { it.copy(hoverCoords = emptySet(), hoverValid = false) }
             return
         }
@@ -294,14 +293,6 @@ class PlacementViewModel @Inject constructor(
                         return@launch
                     }
 
-                    // BUG 1 FIX — STEP 1: Ensure a parent Game row exists in Room so that
-                    // the BoardStateEntity foreign key constraint is satisfied.
-                    // GameDao uses OnConflictStrategy.REPLACE so this is safe to call even
-                    // if the row was already inserted (back-press + retry scenario).
-                    // If this write fails we MUST return early — proceeding to saveBoardState
-                    // without the parent row would cause a FK violation (or silently succeed
-                    // if FK enforcement is off, but the game row would still be missing for
-                    // stats recording later).
                     try {
                         gameRepository.createGame(
                             com.battleship.fleetcommand.core.domain.model.Game(
@@ -314,19 +305,12 @@ class PlacementViewModel @Inject constructor(
                         )
                         Timber.d("PlacementViewModel: ONLINE — ensured local Game row for gameId=$firebaseGameId")
                     } catch (e: Exception) {
-                        // A failure here means the local DB is in a bad state.
-                        // We cannot safely proceed — return early with an error.
                         _uiState.update { it.copy(isSubmitting = false) }
                         Timber.e(e, "PlacementViewModel: ONLINE — createGame local row failed, aborting gameId=$firebaseGameId")
                         _uiEffect.emit(UiEffect.ShowError("Failed to prepare local game data. Please restart."))
                         return@launch
                     }
 
-                    // BUG 1 FIX — STEP 2: Persist the ship placements to Room BEFORE
-                    // calling Firebase. This guarantees OnlineGameViewModel.loadMyPlacements()
-                    // will find the data regardless of Firebase network timing.
-                    // If this write fails we MUST return early — ships will be invisible and
-                    // hits will never register if myPlacements is empty in OnlineGameViewModel.
                     try {
                         gameRepository.saveBoardState(
                             firebaseGameId,
@@ -341,10 +325,6 @@ class PlacementViewModel @Inject constructor(
                         return@launch
                     }
 
-                    // BUG 1 FIX — STEP 3: Write placements to Firebase so the opponent's
-                    // device (and Firebase game state) knows this player is ready.
-                    // If this fails, the Room write already succeeded so local state is intact.
-                    // We return early with an error so the player can retry.
                     val result = firebaseMatchRepository.submitShipPlacement(
                         gameId = firebaseGameId,
                         ships  = _uiState.value.placements,
@@ -368,17 +348,7 @@ class PlacementViewModel @Inject constructor(
         }
     }
 
-    private fun buildBoard(placements: List<ShipPlacement>): BoardViewState {
-        val cellStates = Array(GameConstants.BOARD_SIZE * GameConstants.BOARD_SIZE) { CellDisplayState.WATER }
-        for (placement in placements) {
-            for (coord in placement.occupiedCoords()) {
-                if (coord.isValid()) cellStates[coord.index] = CellDisplayState.SHIP
-            }
-        }
-        val cells    = cellStates.mapIndexed { i, state -> CellViewState(Coord(i), state) }.toImmutableList()
-        val shipViews = placements.map { p ->
-            ShipPlacementViewState(p.shipId, p.headCoord, p.orientation, ShipRegistry.sizeOf(p.shipId))
-        }.toImmutableList()
-        return BoardViewState(cells = cells, ownShips = shipViews)
-    }
+    // ── CHANGED: delegates to shared BoardBuilder ──
+    private fun buildBoard(placements: List<ShipPlacement>): BoardViewState =
+        BoardBuilder.buildPlacementBoard(placements)
 }
