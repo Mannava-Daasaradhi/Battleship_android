@@ -27,6 +27,9 @@ class BattleshipAndroidFeatureConventionPlugin : Plugin<Project> {
                 }
             }
 
+            // Compose opt-ins only for modules that actually have Compose on classpath
+            configureKotlinCompose()
+
             dependencies {
                 val bom = platform("androidx.compose:compose-bom:2024.12.01")
                 "implementation"(bom)
@@ -36,8 +39,8 @@ class BattleshipAndroidFeatureConventionPlugin : Plugin<Project> {
                 "implementation"("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
                 "implementation"("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
                 "implementation"("androidx.hilt:hilt-navigation-compose:1.2.0")
-                "implementation"("com.google.dagger:hilt-android:2.53")
-                "ksp"("com.google.dagger:hilt-android-compiler:2.53")
+                "implementation"("com.google.dagger:hilt-android:2.57.1")
+                "ksp"("com.google.dagger:hilt-android-compiler:2.57.1")
 
                 // Testing
                 "testImplementation"("org.junit.jupiter:junit-jupiter-api:5.11.4")

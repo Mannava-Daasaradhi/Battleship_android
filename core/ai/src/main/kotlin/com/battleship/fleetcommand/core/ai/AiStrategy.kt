@@ -55,19 +55,9 @@ interface AiStrategy {
 
 // ── Board extension helpers used across AI implementations ─────────────────
 
-/**
- * Returns all [Coord]s that have not yet been fired at (state == Water on fog view).
- */
-fun Board.unshotCoords(): List<Coord> {
-    val result = mutableListOf<Coord>()
-    var i = 0
-    while (i < GameConstants.BOARD_SIZE * GameConstants.BOARD_SIZE) {
-        val coord = Coord(i)
-        if (cellAt(coord) == CellState.Water) result.add(coord)
-        i++
-    }
-    return result
-}
+// NOTE: unshotCoords() is intentionally NOT duplicated here.
+// Board.unshotCoords() is defined as a member on Board — use that directly.
+// EasyAI and MediumAI call board.unshotCoords() which resolves to the member.
 
 /**
  * Returns true if [coord] has not yet been fired at.

@@ -23,6 +23,9 @@ class BattleshipAndroidLibraryComposeConventionPlugin : Plugin<Project> {
                     compose = true
                 }
             }
+
+            // Compose opt-ins only for modules that actually have Compose on classpath
+            configureKotlinCompose()
         }
     }
 }

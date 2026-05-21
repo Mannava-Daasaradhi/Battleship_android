@@ -57,21 +57,31 @@ class PlayGamesManager @Inject constructor() {
 
     // ── Leaderboards (Section 7.1) ─────────────────────────────────────────
 
+    /**
+     * Submit scores to all eligible leaderboards.
+     *
+     * @param didWin True if the current player won this game. Callers must pass
+     *               the resolved win state — [GameResult.winner] is non-nullable
+     *               (there is always a winner in Battleship), so win/loss context
+     *               must come from the caller comparing [GameResult.winner] to the
+     *               current player's slot.
+     */
     fun submitLeaderboardScores(
         activity: Activity,
         result: GameResult,
+        didWin: Boolean,
         difficulty: Difficulty?,
         stats: PlayerStats,
     ) {
         val lb = PlayGames.getLeaderboardsClient(activity)
 
         // Fastest Admiral — Hard + Win only, lower score is better
-        if (result.winner != null && difficulty == Difficulty.HARD) {
+        if (didWin && difficulty == Difficulty.HARD) {
             lb.submitScore(LEADERBOARD_FASTEST_ADMIRAL, result.durationSeconds)
         }
 
         // Most Victories — every win, submit cumulative total
-        if (result.winner != null) {
+        if (didWin) {
             lb.submitScore(LEADERBOARD_MOST_VICTORIES, stats.wins.toLong())
         }
 
@@ -112,16 +122,21 @@ class PlayGamesManager @Inject constructor() {
     /**
      * Evaluate and submit all 12 achievements post-game.
      * Section 7.2 — full achievement logic.
+     *
+     * @param didWin True if the current player won this game. [GameResult.winner] is
+     *               non-nullable (Battleship always has a winner); callers must resolve
+     *               win/loss by comparing [GameResult.winner] to the current player slot.
      */
     fun checkPostGameAchievements(
         activity: Activity,
         result: GameResult,
+        didWin: Boolean,
         difficulty: Difficulty?,
         sunkEnemyShips: Set<ShipId>,
         myRemainingShips: Set<ShipId>,
         stats: PlayerStats,
     ) {
-        val isWin = result.winner != null
+        val isWin = didWin
         val mode  = result.mode
 
         // ── Standard (one-time) ──────────────────────────────────────────
