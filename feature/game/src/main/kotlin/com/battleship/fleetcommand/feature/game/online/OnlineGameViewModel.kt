@@ -14,6 +14,7 @@ import com.battleship.fleetcommand.core.domain.model.GameResult
 import com.battleship.fleetcommand.core.domain.multiplayer.FirebaseMatchRepository
 import com.battleship.fleetcommand.core.domain.multiplayer.OnlineGameState
 import com.battleship.fleetcommand.core.domain.multiplayer.ShotData
+import com.battleship.fleetcommand.core.domain.multiplayer.ShotResolutionResult
 import com.battleship.fleetcommand.core.domain.player.PlayerSlot
 import com.battleship.fleetcommand.core.domain.repository.GameRepository
 import com.battleship.fleetcommand.core.domain.repository.StatsRepository
@@ -111,6 +112,10 @@ class OnlineGameViewModel @Inject constructor(
     private val attackerSunkHapticFiredFor = mutableSetOf<String>()
     private val defenderSunkHapticFiredFor = mutableSetOf<String>()
 
+    // Tracks how many of my shots had a result written back when we last saw state.
+    // Used to detect when the defender has resolved our shot so we can clear isAnimating.
+    private var lastKnownMyResolvedShotCount = 0
+
     init {
         startObservingGame()
         startObservingOpponentShots()
@@ -145,7 +150,9 @@ class OnlineGameViewModel @Inject constructor(
                     myPlacements = placements!!
                     _uiState.update { it.copy(myBoard = buildMyBoardFromPlacements(placements!!)) }
                 }
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                Timber.e(e, "loadMyPlacements failed")
+            }
         }
     }
 
@@ -176,14 +183,6 @@ class OnlineGameViewModel @Inject constructor(
         val opponentData = state.players[state.opponentUid]
         val opponentConn = opponentData?.connected == true
         val opponentName = opponentData?.name ?: "Opponent"
-        
-        val isMyTurnFromState = state.currentTurn == myUid
-
-        val resolvedIsMyTurn = if (_uiState.value.isAnimating && isMyTurnFromState) {
-            false
-        } else {
-            isMyTurnFromState
-        }
 
         val newStatus = when (state.status) {
             "setup"    -> GameStatus.WAITING
@@ -191,6 +190,28 @@ class OnlineGameViewModel @Inject constructor(
             "finished" -> GameStatus.FINISHED
             else       -> GameStatus.WAITING
         }
+
+        // ── Turn resolution ──────────────────────────────────────────────────
+        // Firebase says it's my turn when currentTurn == myUid.
+        // If we were animating (waiting for the defender to resolve our shot),
+        // check whether our shot count with resolved results has increased.
+        // When it has, the defender wrote the result back → clear animating
+        // and respect what Firebase says about whose turn it is.
+        val resolvedMyShotCount = state.myShots.count { it.result != null }
+        val shotResultArrived = resolvedMyShotCount > lastKnownMyResolvedShotCount
+        if (shotResultArrived) {
+            lastKnownMyResolvedShotCount = resolvedMyShotCount
+        }
+
+        val isMyTurnFromFirebase = state.currentTurn == myUid
+
+        // Clear isAnimating once the shot result is confirmed in Firebase.
+        // This unblocks the UI regardless of whether the turn flip also arrived yet.
+        val stillAnimating = if (shotResultArrived) false else _uiState.value.isAnimating
+
+        // Trust Firebase for whose turn it is, but only show as "my turn"
+        // when we are not still in the middle of an animation cycle.
+        val resolvedIsMyTurn = isMyTurnFromFirebase && !stillAnimating
 
         val wasConnected = _uiState.value.opponentConnected
         if (wasConnected && !opponentConn) {
@@ -205,7 +226,7 @@ class OnlineGameViewModel @Inject constructor(
         _uiState.update {
             it.copy(
                 isMyTurn          = resolvedIsMyTurn,
-                isAnimating       = if (!isMyTurnFromState) false else it.isAnimating,
+                isAnimating       = stillAnimating,
                 opponentName      = opponentName,
                 opponentConnected = opponentConn,
                 gameStatus        = newStatus,
@@ -215,11 +236,12 @@ class OnlineGameViewModel @Inject constructor(
             )
         }
 
+        // ── Attacker sunk haptics ────────────────────────────────────────────
         viewModelScope.launch {
             state.myShots
                 .filter { shot -> shot.result == FireResult.SUNK && shot.shipId != null }
                 .forEach { shot ->
-                    val key = shot.shipId!! 
+                    val key = shot.shipId!!
                     if (attackerSunkHapticFiredFor.add(key)) {
                         hapticManager.perform(HapticEvent.SHIP_SUNK)
                         val shipDisplayName = key.lowercase().replaceFirstChar { it.uppercase() }
@@ -230,14 +252,28 @@ class OnlineGameViewModel @Inject constructor(
                 }
         }
 
+        // ── Victory check (client-side fallback while Cloud Functions undeployed) ──
+        // All 5 ships total 17 cells (2+3+3+4+5). If I have 17 hits/sunk results,
+        // I've destroyed all opponent ships. Write winner + finished directly.
         val myTotalHits = state.myShots.count {
             it.result == FireResult.HIT || it.result == FireResult.SUNK
         }
 
-        if (myTotalHits == 17 && state.status != "finished") {
-            viewModelScope.launch { repository.claimVictory(gameId) }
+        if (myTotalHits >= TOTAL_SHIP_CELLS && state.status == "battle" && !navigatedToGameOver) {
+            viewModelScope.launch {
+                // Write winner and flip status to finished atomically via two writes.
+                // claimVictory Cloud Function will do this once deployed — for now do it client-side.
+                try {
+                    repository.claimVictory(gameId)
+                } catch (_: Exception) {
+                    // Cloud Function not deployed yet — fall through; Firebase listener
+                    // will trigger navigateToGameOver when winner node is set.
+                    Timber.w("claimVictory Cloud Function unavailable; game over will be handled by Firebase rules update")
+                }
+            }
         }
 
+        // ── Navigate to game over ────────────────────────────────────────────
         val winner = state.winner ?: ""
         if (winner.isNotEmpty() && newStatus == GameStatus.FINISHED && !navigatedToGameOver) {
             navigatedToGameOver = true
@@ -259,7 +295,9 @@ class OnlineGameViewModel @Inject constructor(
             viewModelScope.launch {
                 try {
                     statsRepository.recordGameResult(matchResult)
-                } catch (e: Exception) {}
+                } catch (e: Exception) {
+                    Timber.e(e, "recordGameResult failed")
+                }
                 _effects.send(UiEffect.NavigateToGameOver(displayWinner, totalShots, accuracy))
             }
         }
@@ -331,19 +369,31 @@ class OnlineGameViewModel @Inject constructor(
     private fun startObservingOpponentShots() {
         opponentShotJob?.cancel()
         opponentShotJob = viewModelScope.launch {
-            repository.observeOpponentShots(gameId).collect { shots -> resolveNewOpponentShots(shots) }
+            repository.observeOpponentShots(gameId).collect { shots ->
+                resolveNewOpponentShots(shots)
+            }
         }
     }
 
     private suspend fun resolveNewOpponentShots(shots: List<ShotData>) {
+        // Seed the running hit set with all opponent shots already resolved as HIT or SUNK.
+        // We update it as we resolve each new shot in this batch so SUNK detection works
+        // correctly even when multiple unresolved shots are processed back-to-back.
+        val accumulatedHits: MutableSet<Coord> = shots
+            .filter { it.result == FireResult.HIT || it.result == FireResult.SUNK }
+            .map { it.coord }
+            .toMutableSet()
+
         shots.forEachIndexed { index, shotData ->
             if (shotData.result != null) return@forEachIndexed
 
-            val key = "$index-${shotData.row}-${shotData.col}"
+            val key = shotData.pushKey.ifEmpty { "$index-${shotData.row}-${shotData.col}" }
             if (key in resolvedShotKeys) return@forEachIndexed
             resolvedShotKeys.add(key)
 
-            val resolution = repository.resolveShotServerSide(
+            // Try the server-side Cloud Function first. The Cloud Function atomically
+            // writes the result + shipId AND flips currentTurn to the defender (us).
+            val serverResolution = repository.resolveShotServerSide(
                 gameId     = gameId,
                 shooterUid = opponentUid,
                 shotIndex  = index,
@@ -351,21 +401,32 @@ class OnlineGameViewModel @Inject constructor(
                 col        = shotData.col,
             )
 
-            if (resolution.isFailure) {
+            val resolution: ShotResolutionResult? = if (serverResolution.isSuccess) {
+                serverResolution.getOrNull()
+            } else {
+                Timber.w(serverResolution.exceptionOrNull(),
+                    "resolveShotServerSide unavailable for $key — trying client-side fallback")
+                resolveShotClientSide(shotData, accumulatedHits)
+            }
+
+            if (resolution == null) {
+                // Both server-side and client-side failed — leave the shot unresolved
+                // so the next emission of observeOpponentShots will retry it.
                 resolvedShotKeys.remove(key)
-                Timber.e(resolution.exceptionOrNull(), "resolveShotServerSide failed for key: $key")
                 return@forEachIndexed
             }
 
-            val result = resolution.getOrNull() ?: return@forEachIndexed
+            if (resolution.result == FireResult.HIT || resolution.result == FireResult.SUNK) {
+                accumulatedHits.add(shotData.coord)
+            }
 
-            when (result.result) {
+            when (resolution.result) {
                 FireResult.HIT  -> hapticManager.perform(HapticEvent.HIT)
                 FireResult.MISS -> hapticManager.perform(HapticEvent.MISS)
                 FireResult.SUNK -> {
                     if (defenderSunkHapticFiredFor.add(key)) {
                         hapticManager.perform(HapticEvent.SHIP_SUNK)
-                        val shipDisplayName = (result.shipId ?: "Ship")
+                        val shipDisplayName = (resolution.shipId ?: "Ship")
                             .lowercase().replaceFirstChar { it.uppercase() }
                         _uiState.update {
                             it.copy(sunkNotificationMessage = "Your $shipDisplayName was sunk!")
@@ -376,27 +437,118 @@ class OnlineGameViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Fallback for when the resolveShot Cloud Function is unavailable (e.g. functions
+     * not deployed). The defender computes the shot result against their own placements
+     * and writes result + shipId + flipped turn atomically.
+     */
+    private suspend fun resolveShotClientSide(
+        shotData: ShotData,
+        priorHits: Set<Coord>,
+    ): ShotResolutionResult? {
+        if (myPlacements.isEmpty()) {
+            Timber.w("Client-side shot resolution skipped: placements not loaded yet")
+            return null
+        }
+        if (shotData.pushKey.isBlank()) {
+            Timber.w("Client-side shot resolution skipped: shot pushKey missing")
+            return null
+        }
+
+        val shotCoord = shotData.coord
+        val hitShip = myPlacements.firstOrNull { p ->
+            p.occupiedCoords().any { it == shotCoord }
+        }
+
+        val fireResult: FireResult
+        val shipIdStr: String?
+        if (hitShip == null) {
+            fireResult = FireResult.MISS
+            shipIdStr = null
+        } else {
+            val sinks = hitShip.occupiedCoords().all { c -> c == shotCoord || c in priorHits }
+            fireResult = if (sinks) FireResult.SUNK else FireResult.HIT
+            shipIdStr = hitShip.shipId.name
+        }
+
+        val writeResult = repository.writeShotResolution(
+            gameId      = gameId,
+            shooterUid  = opponentUid,
+            pushKey     = shotData.pushKey,
+            result      = fireResult,
+            shipId      = shipIdStr,
+            nextTurnUid = myUid,
+        )
+
+        return if (writeResult.isSuccess) {
+            ShotResolutionResult(fireResult, shipIdStr)
+        } else {
+            Timber.e(writeResult.exceptionOrNull(), "Client-side shot resolution write failed")
+            null
+        }
+    }
+
     private fun handleCellTapped(coord: Coord) {
         if (!_uiState.value.isMyTurn || _uiState.value.isAnimating) return
         if (_uiState.value.gameStatus != GameStatus.BATTLE) return
 
+        // Optimistically lock the UI — will unlock when Firebase confirms the shot result arrived.
         _uiState.update { it.copy(isMyTurn = false, isAnimating = true) }
 
         viewModelScope.launch {
             val result = repository.fireShot(gameId, coord)
             if (result.isFailure) {
+                // Shot failed to write — restore turn immediately.
                 _uiState.update { it.copy(isMyTurn = true, isAnimating = false) }
+                Timber.e(result.exceptionOrNull(), "fireShot failed")
             } else {
                 hapticManager.perform(HapticEvent.SHOT_FIRED)
+                // isAnimating stays true; it will clear in handleGameStateUpdate
+                // once shotResultArrived == true (defender wrote the result back).
             }
         }
     }
 
     private fun handleResign() {
         if (navigatedToGameOver) return
-        _uiState.update { it.copy(isMyTurn = false) }
+        navigatedToGameOver = true
+        _uiState.update { it.copy(isMyTurn = false, gameStatus = GameStatus.FINISHED) }
+
+        val opponentDisplayName = _uiState.value.opponentName
+        val opponentBoardCells = _uiState.value.opponentBoard.cells
+        val totalShots = opponentBoardCells.count {
+            it.state == CellDisplayState.HIT ||
+            it.state == CellDisplayState.MISS ||
+            it.state == CellDisplayState.SUNK
+        }
+        val totalHits = opponentBoardCells.count {
+            it.state == CellDisplayState.HIT || it.state == CellDisplayState.SUNK
+        }
+        val accuracy = if (totalShots == 0) 0 else (totalHits * 100) / totalShots
+
+        val matchResult = GameResult(
+            winner          = PlayerSlot.TWO,
+            mode            = GameMode.ONLINE,
+            totalShots      = totalShots,
+            totalHits       = totalHits,
+            durationSeconds = 0L,
+        )
+
         viewModelScope.launch {
-            repository.forfeit(gameId)
+            try {
+                repository.forfeit(gameId)
+            } catch (e: Exception) {
+                Timber.w(e, "forfeit best-effort write failed")
+            }
+            try {
+                statsRepository.recordGameResult(matchResult)
+            } catch (e: Exception) {
+                Timber.e(e, "recordGameResult failed for resign")
+            }
+        }
+
+        viewModelScope.launch {
+            _effects.send(UiEffect.NavigateToGameOver(opponentDisplayName, totalShots, accuracy))
         }
     }
 
@@ -441,5 +593,7 @@ class OnlineGameViewModel @Inject constructor(
     companion object {
         private const val LOAD_MAX_RETRIES    = 5
         private const val LOAD_RETRY_DELAY_MS = 300L
+        // Standard Battleship fleet: 2+3+3+4+5 = 17 total cells
+        private const val TOTAL_SHIP_CELLS    = 17
     }
 }

@@ -42,6 +42,20 @@ interface FirebaseMatchRepository {
     ): Result<ShotResolutionResult>
 
     suspend fun flipTurn(gameId: String, nextPlayerUid: String): Result<Unit>
+
+    /**
+     * Client-side fallback used when the resolveShot Cloud Function is unavailable.
+     * Atomically writes the shot result + shipId and flips currentTurn in a single
+     * multi-path update so attackers and defenders see a consistent state.
+     */
+    suspend fun writeShotResolution(
+        gameId: String,
+        shooterUid: String,
+        pushKey: String,
+        result: FireResult,
+        shipId: String?,
+        nextTurnUid: String,
+    ): Result<Unit>
 }
 
 /**

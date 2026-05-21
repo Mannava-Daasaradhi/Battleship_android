@@ -17,6 +17,7 @@ import com.battleship.fleetcommand.core.multiplayer.FirebaseSchema
 import com.battleship.fleetcommand.core.multiplayer.auth.FirebaseAuthManager
 import com.battleship.fleetcommand.core.multiplayer.mapper.GameSyncMapper
 import com.battleship.fleetcommand.core.multiplayer.mapper.ShipPlacementDto
+import com.battleship.fleetcommand.core.multiplayer.mapper.toSchemaString
 import com.battleship.fleetcommand.core.multiplayer.matchmaking.MatchmakingRepository
 import com.google.firebase.database.ChildEventListener
 import com.google.firebase.database.DataSnapshot
@@ -195,7 +196,7 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
         } catch (_: Exception) {}
     }
 
-    // ── Server-side operations via Cloud Functions ───────────────────────────
+    // ── Server-side operations via Cloud Functions (with client-side fallback) ───
 
     override suspend fun claimVictory(gameId: String): Result<Unit> {
         return try {
@@ -204,7 +205,22 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
                 .await()
             Result.success(Unit)
         } catch (e: Exception) {
-            Timber.w(e, "claimVictory Cloud Function failed for game=$gameId")
+            Timber.w(e, "claimVictory Cloud Function unavailable; falling back to direct write")
+            claimVictoryClientSide(gameId)
+        }
+    }
+
+    private suspend fun claimVictoryClientSide(gameId: String): Result<Unit> {
+        val myUid = authManager.currentUid ?: return Result.failure(Exception("Not authenticated"))
+        return try {
+            val updates = mapOf<String, Any?>(
+                "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.META}/${FirebaseSchema.WINNER}" to myUid,
+                "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.META}/${FirebaseSchema.STATUS}" to FirebaseSchema.STATUS_FINISHED,
+            )
+            database.reference.updateChildren(updates).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Timber.e(e, "claimVictory client-side fallback failed for game=$gameId")
             Result.failure(e)
         }
     }
@@ -216,7 +232,32 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
                 .await()
             Result.success(Unit)
         } catch (e: Exception) {
-            Timber.w(e, "forfeit Cloud Function failed for game=$gameId")
+            Timber.w(e, "forfeit Cloud Function unavailable; falling back to direct write")
+            forfeitClientSide(gameId)
+        }
+    }
+
+    private suspend fun forfeitClientSide(gameId: String): Result<Unit> {
+        val myUid = authManager.currentUid ?: return Result.failure(Exception("Not authenticated"))
+        return try {
+            val metaRef = database.getReference("${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.META}")
+            val metaSnap = metaRef.get().await()
+            val hostUid = metaSnap.child(FirebaseSchema.HOST_UID).getValue(String::class.java)
+            val guestUid = metaSnap.child(FirebaseSchema.GUEST_UID).getValue(String::class.java)
+            val opponentUid = when (myUid) {
+                hostUid -> guestUid
+                guestUid -> hostUid
+                else -> null
+            } ?: return Result.failure(Exception("No opponent found for forfeit"))
+
+            val updates = mapOf<String, Any?>(
+                "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.META}/${FirebaseSchema.WINNER}" to opponentUid,
+                "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.META}/${FirebaseSchema.STATUS}" to FirebaseSchema.STATUS_FINISHED,
+            )
+            database.reference.updateChildren(updates).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Timber.e(e, "forfeit client-side fallback failed for game=$gameId")
             Result.failure(e)
         }
     }
@@ -264,6 +305,34 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
                 .setValue(nextPlayerUid).await()
             Result.success(Unit)
         } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    override suspend fun writeShotResolution(
+        gameId: String,
+        shooterUid: String,
+        pushKey: String,
+        result: FireResult,
+        shipId: String?,
+        nextTurnUid: String,
+    ): Result<Unit> {
+        if (pushKey.isBlank()) {
+            return Result.failure(IllegalArgumentException("writeShotResolution requires a non-blank pushKey"))
+        }
+        return try {
+            val basePath = "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.SHOTS}/$shooterUid/$pushKey"
+            val updates = mutableMapOf<String, Any?>(
+                "$basePath/${FirebaseSchema.SHOT_RESULT}" to result.toSchemaString(),
+                "${FirebaseSchema.GAMES}/$gameId/${FirebaseSchema.META}/${FirebaseSchema.CURRENT_TURN}" to nextTurnUid,
+            )
+            if (shipId != null) {
+                updates["$basePath/${FirebaseSchema.SHOT_SHIP_ID}"] = shipId
+            }
+            database.reference.updateChildren(updates).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Timber.e(e, "writeShotResolution failed for game=$gameId shooter=$shooterUid pushKey=$pushKey")
             Result.failure(e)
         }
     }

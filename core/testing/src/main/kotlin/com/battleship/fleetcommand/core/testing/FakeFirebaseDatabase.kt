@@ -232,6 +232,28 @@ class FakeFirebaseDatabase : FirebaseMatchRepository {
         return Result.success(Unit)
     }
 
+    override suspend fun writeShotResolution(
+        gameId: String,
+        shooterUid: String,
+        pushKey: String,
+        result: FireResult,
+        shipId: String?,
+        nextTurnUid: String,
+    ): Result<Unit> {
+        val node = games[gameId]
+            ?: return Result.failure(Exception("writeShotResolution: game not found: $gameId"))
+        val shots = node.shots[shooterUid]
+            ?: return Result.failure(Exception("writeShotResolution: no shots for $shooterUid"))
+        val shotIndex = pushKey.toIntOrNull() ?: shots.indexOfFirst { it.result == null }
+        val shot = shots.getOrNull(shotIndex)
+            ?: return Result.failure(Exception("writeShotResolution: shot not found at $pushKey"))
+        shot.result = result
+        shot.shipId = shipId
+        node.currentTurn = nextTurnUid
+        stateFlows[gameId]?.value = node
+        return Result.success(Unit)
+    }
+
     // ── Test helpers ──────────────────────────────────────────────────────────
 
     /** Directly writes a shot result — useful for attacker-side tests. */
@@ -317,7 +339,8 @@ class FakeFirebaseDatabase : FirebaseMatchRepository {
         col       = col,
         result    = result,
         shipId    = shipId,
-        timestamp = timestamp
+        timestamp = timestamp,
+        pushKey   = index.toString(),
     )
 
     private fun generateRoomCode(): String {

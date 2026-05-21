@@ -1,0 +1,974 @@
+{
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ads\\build.gradle.kts": {
+    "mtime": 1777717521.3916903,
+    "hash": "5f1556375be7adce30f2e3783dec9bde"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ads\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ads\\AdManager.kt": {
+    "mtime": 1777715927.7818,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ads\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ads\\consent\\ConsentManager.kt": {
+    "mtime": 1777715927.8201447,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ads\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ads\\di\\AdsModule.kt": {
+    "mtime": 1777715927.8398397,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ads\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\ads\\AdManagerTest.kt": {
+    "mtime": 1777715927.8618104,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\build.gradle.kts": {
+    "mtime": 1777788143.9799788,
+    "hash": "6e1a554f4f7cb306f36404ae55dc3c7e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\bin\\main\\com\\battleship\\fleetcommand\\core\\ai\\AiStrategy.kt": {
+    "mtime": 1777788699.065,
+    "hash": "ec4b23c9473ff7a17f088cc93d46c0a1"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\bin\\main\\com\\battleship\\fleetcommand\\core\\ai\\AiStrategyFactory.kt": {
+    "mtime": 1777787829.34,
+    "hash": "e22623ffa86c012e53d957476db12672"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\bin\\main\\com\\battleship\\fleetcommand\\core\\ai\\AiTurnProcessor.kt": {
+    "mtime": 1777715925.806,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\bin\\main\\com\\battleship\\fleetcommand\\core\\ai\\BoardKnowledge.kt": {
+    "mtime": 1777715925.719,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\bin\\main\\com\\battleship\\fleetcommand\\core\\ai\\EasyAI.kt": {
+    "mtime": 1777787803.942,
+    "hash": "90530a71b74e32eb8b955f2b3beb475c"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\bin\\main\\com\\battleship\\fleetcommand\\core\\ai\\HardAI.kt": {
+    "mtime": 1777789755.302,
+    "hash": "0b0cdb4a8f5b61217ca1c6cce08ec03f"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\bin\\main\\com\\battleship\\fleetcommand\\core\\ai\\MediumAI.kt": {
+    "mtime": 1777787813.808,
+    "hash": "912d5e809b6bbbdae9e01afeb59ec067"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\bin\\test\\com\\battleship\\fleetcommand\\core\\ai\\AiStrategyFactoryTest.kt": {
+    "mtime": 1777787898.291,
+    "hash": "fe109b2a9a748c9c70f7f3111ddff258"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\bin\\test\\com\\battleship\\fleetcommand\\core\\ai\\BoardTestBuilder.kt": {
+    "mtime": 1777789597.765,
+    "hash": "32b0b3f214826ed270371631ba1c696b"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\bin\\test\\com\\battleship\\fleetcommand\\core\\ai\\EasyAITest.kt": {
+    "mtime": 1777788942.426,
+    "hash": "5ad517e8dc87c9cee4eae996b31c6aa4"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\bin\\test\\com\\battleship\\fleetcommand\\core\\ai\\HardAITest.kt": {
+    "mtime": 1777788959.904,
+    "hash": "f3a69e66c43aeaed31c4c7a3ee22b3e2"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\bin\\test\\com\\battleship\\fleetcommand\\core\\ai\\MediumAITest.kt": {
+    "mtime": 1777789047.775,
+    "hash": "f00a181a507ce7c805d4573406965bd0"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ai\\AiStrategy.kt": {
+    "mtime": 1777788699.0655613,
+    "hash": "ec4b23c9473ff7a17f088cc93d46c0a1"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ai\\AiStrategyFactory.kt": {
+    "mtime": 1777787829.3409486,
+    "hash": "e22623ffa86c012e53d957476db12672"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ai\\AiTurnProcessor.kt": {
+    "mtime": 1777715925.8066828,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ai\\BoardKnowledge.kt": {
+    "mtime": 1777715925.7193606,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ai\\EasyAI.kt": {
+    "mtime": 1777787803.9427617,
+    "hash": "90530a71b74e32eb8b955f2b3beb475c"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ai\\HardAI.kt": {
+    "mtime": 1777789755.3023736,
+    "hash": "0b0cdb4a8f5b61217ca1c6cce08ec03f"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ai\\MediumAI.kt": {
+    "mtime": 1777787813.808874,
+    "hash": "912d5e809b6bbbdae9e01afeb59ec067"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\ai\\AiStrategyFactoryTest.kt": {
+    "mtime": 1777787898.2910826,
+    "hash": "fe109b2a9a748c9c70f7f3111ddff258"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\ai\\BoardTestBuilder.kt": {
+    "mtime": 1777789597.7655003,
+    "hash": "32b0b3f214826ed270371631ba1c696b"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\ai\\EasyAITest.kt": {
+    "mtime": 1777788942.426872,
+    "hash": "5ad517e8dc87c9cee4eae996b31c6aa4"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\ai\\HardAITest.kt": {
+    "mtime": 1777788959.9043875,
+    "hash": "f3a69e66c43aeaed31c4c7a3ee22b3e2"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ai\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\ai\\MediumAITest.kt": {
+    "mtime": 1777789047.7750795,
+    "hash": "f00a181a507ce7c805d4573406965bd0"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\analytics\\build.gradle.kts": {
+    "mtime": 1777717508.761016,
+    "hash": "16ef7a2c7b81745da9e3cdd1cd3a93ad"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\analytics\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\analytics\\AnalyticsEvents.kt": {
+    "mtime": 1777715928.012638,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\analytics\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\analytics\\AnalyticsManager.kt": {
+    "mtime": 1777715927.9921072,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\analytics\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\analytics\\di\\AnalyticsModule.kt": {
+    "mtime": 1777715928.036178,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\analytics\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\analytics\\AnalyticsManagerTest.kt": {
+    "mtime": 1777715928.0583546,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\build.gradle.kts": {
+    "mtime": 1779292672.9686706,
+    "hash": "a13c2ebee53665dc88af391996cb5fd8"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\datastore\\DataStoreKeys.kt": {
+    "mtime": 1779293339.9207408,
+    "hash": "fab2d97972367e4b61019031631537a6"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\datastore\\PreferencesRepositoryImpl.kt": {
+    "mtime": 1779293351.2173097,
+    "hash": "29e0eaa959851fd148f5bd9614c79232"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\local\\BattleshipDatabase.kt": {
+    "mtime": 1777827774.3407645,
+    "hash": "fdf8070ca32204dce45527ec16f1bf4a"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\local\\dao\\BoardStateDao.kt": {
+    "mtime": 1777827762.740776,
+    "hash": "ddcf91430cb1224ddf96a4d0c757ac50"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\local\\dao\\GameDao.kt": {
+    "mtime": 1777827737.852126,
+    "hash": "a8ac92191b7b5f7c0a2de55b03ccfd9a"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\local\\dao\\ShotDao.kt": {
+    "mtime": 1777827745.7050633,
+    "hash": "0ac0905d5e7475706562b8c599cfce21"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\local\\dao\\StatsDao.kt": {
+    "mtime": 1777827753.090134,
+    "hash": "fd87c263d58344d2c67be0a4f362e44f"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\local\\entity\\BoardStateEntity.kt": {
+    "mtime": 1777827725.612857,
+    "hash": "b2847b1a1acd8baefa6c02750f085396"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\local\\entity\\GameEntity.kt": {
+    "mtime": 1777827675.70712,
+    "hash": "4c624a99ceddbe5b4d41fc5d707de284"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\local\\entity\\ShotEntity.kt": {
+    "mtime": 1777827691.9905128,
+    "hash": "8df9f01b055c47f695d4a16d9a18e749"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\local\\entity\\StatsEntity.kt": {
+    "mtime": 1777827707.7971594,
+    "hash": "168e966f25ec45d3f1fb5e402e7a1031"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\local\\migration\\DatabaseMigrations.kt": {
+    "mtime": 1777827788.211101,
+    "hash": "16b5d69c0992aaaffeb52dbcf3a42833"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\mapper\\GameMapper.kt": {
+    "mtime": 1777827798.3187928,
+    "hash": "4d0d413b64567ea80b0fc84b0b19f4b8"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\mapper\\ShotMapper.kt": {
+    "mtime": 1777827807.0749874,
+    "hash": "00d7132ed8104f83d959cefae266cce1"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\repository\\GameRepositoryImpl.kt": {
+    "mtime": 1777827819.0672176,
+    "hash": "850c69fc2f8d92f3ad13aa5894ee39d7"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\repository\\StatsRepositoryImpl.kt": {
+    "mtime": 1777827828.8060033,
+    "hash": "df158b9f9c316c1ba70356090a192ff7"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\DatabaseMigrationTest.kt": {
+    "mtime": 1777715926.5161512,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\GameDaoTest.kt": {
+    "mtime": 1777715926.450467,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\ShotDaoTest.kt": {
+    "mtime": 1777715926.4724803,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\data\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\data\\StatsDaoTest.kt": {
+    "mtime": 1777715926.4920893,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\build.gradle.kts": {
+    "mtime": 1777720755.7321544,
+    "hash": "a57dae84d214cdea6801e6f6e7c65b51"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\Constants.kt": {
+    "mtime": 1777721338.206,
+    "hash": "221773780dec67923dffe537c43478d5"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\Coord.kt": {
+    "mtime": 1777785448.119,
+    "hash": "478b9c4a24f409584dcacdd5df65dbfd"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\Orientation.kt": {
+    "mtime": 1777721614.542,
+    "hash": "93a888fe431c39c23360338cf397fdcd"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\board\\Board.kt": {
+    "mtime": 1777785459.891,
+    "hash": "862aeee40877bd790c0b28245997ea96"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\board\\CellState.kt": {
+    "mtime": 1777723168.836,
+    "hash": "62af8eb76b1ce748c28577117c70ab1a"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\engine\\GameEngine.kt": {
+    "mtime": 1777723192.451,
+    "hash": "075e606bfcf4f07754df3a89bc6710e2"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\engine\\GameEvent.kt": {
+    "mtime": 1777723224.358,
+    "hash": "a4e5fb54f7692bad36774c23ce4bff9c"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\engine\\GameState.kt": {
+    "mtime": 1777723210.672,
+    "hash": "e7a31af5473cef7f092b8d9c50a29451"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\engine\\GameStateMachine.kt": {
+    "mtime": 1779292615.195,
+    "hash": "071030ca68d91cfb0045cbe90faa0cca"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\model\\Game.kt": {
+    "mtime": 1777783855.333,
+    "hash": "8aeb206b8f1b8a12571099c31edcec61"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\model\\GameMode.kt": {
+    "mtime": 1777783169.338,
+    "hash": "f3e458dcc95dd637ae6604e85f04eea9"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\model\\GameResult.kt": {
+    "mtime": 1777783231.384,
+    "hash": "832333d97b09ee079473a558d6b18d45"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\model\\PlayerStats.kt": {
+    "mtime": 1777783335.118,
+    "hash": "7b1683b038721128562b8e1bc9740e4b"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\model\\Shot.kt": {
+    "mtime": 1777783539.412,
+    "hash": "8e5d87f63b5836b381d9c3d04bcc76b2"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\multiplayer\\FirebaseMatchRepository.kt": {
+    "mtime": 1779292746.466,
+    "hash": "fac7f1e0bcbdb0be6039c0f0e3e77455"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\multiplayer\\GameCreationResult.kt": {
+    "mtime": 1777783948.02,
+    "hash": "7d1c0ef312fed431596074f6b51e2a6d"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\multiplayer\\JoinResult.kt": {
+    "mtime": 1777783958.827,
+    "hash": "56244c80e3c9e12648e680ee8a7727b4"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\multiplayer\\MatchmakingError.kt": {
+    "mtime": 1777784063.947,
+    "hash": "149dc615ae966e0f2ced2aea69c2be0a"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\multiplayer\\OnlineGameState.kt": {
+    "mtime": 1779295642.732,
+    "hash": "fb71027e0b57ccdcafa7857dcc88fa88"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\player\\Difficulty.kt": {
+    "mtime": 1777783874.685,
+    "hash": "19d7d5c2505a8563c4f91f61744a8628"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\player\\PlayerSlot.kt": {
+    "mtime": 1777723244.001,
+    "hash": "465e00f8bf344055943f694dd6f2f4a7"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\player\\PlayerType.kt": {
+    "mtime": 1777783896.453,
+    "hash": "96522e8d8fe6c33fd065fcc67dae27d8"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\repository\\GameRepository.kt": {
+    "mtime": 1777783908.34,
+    "hash": "5f2d65628c5beea213e0033c53b498b9"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\repository\\PreferencesRepository.kt": {
+    "mtime": 1779293345.128,
+    "hash": "952b300b5b13ad3fee6efa8cec9d930c"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\repository\\StatsRepository.kt": {
+    "mtime": 1777783920.583,
+    "hash": "59ddd5b4c0d198a46899494f6a8418b7"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\ship\\PlacementValidator.kt": {
+    "mtime": 1777721698.745,
+    "hash": "5b56d683e3bea06c16d18fc3a4d20963"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\ship\\ShipDefinition.kt": {
+    "mtime": 1777721637.876,
+    "hash": "65e835743c88932a4404b3fe1a46d6ad"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\ship\\ShipId.kt": {
+    "mtime": 1777721621.83,
+    "hash": "2140211632d5eaddaa413a693be6e9f2"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\ship\\ShipPlacement.kt": {
+    "mtime": 1777723160.667,
+    "hash": "d2597b710da03993aa0e939a0b4fb523"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\main\\com\\battleship\\fleetcommand\\core\\domain\\ship\\ShipRegistry.kt": {
+    "mtime": 1777721654.462,
+    "hash": "2813aafdaf36d71fb3a31d94bc0062fb"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\test\\com\\battleship\\fleetcommand\\core\\domain\\BoardTest.kt": {
+    "mtime": 1777784641.815,
+    "hash": "93c3f22150d2fe7a60ad630f20d8929f"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\test\\com\\battleship\\fleetcommand\\core\\domain\\CoordTest.kt": {
+    "mtime": 1777784636.06,
+    "hash": "7cb1775ab2b21785f1cfdef3cd9fcf59"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\test\\com\\battleship\\fleetcommand\\core\\domain\\GameEngineTest.kt": {
+    "mtime": 1777784706.602,
+    "hash": "d42d31c8f53154924a495c503ac4132e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\test\\com\\battleship\\fleetcommand\\core\\domain\\GameStateMachineTest.kt": {
+    "mtime": 1777784665.701,
+    "hash": "2ff00ac66c3df045faed8490f1743945"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\test\\com\\battleship\\fleetcommand\\core\\domain\\PlacementValidatorTest.kt": {
+    "mtime": 1777784656.932,
+    "hash": "d3c53787a7a84e626a9426a4b2f0d025"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\bin\\test\\com\\battleship\\fleetcommand\\core\\domain\\ShipRegistryTest.kt": {
+    "mtime": 1777784648.64,
+    "hash": "76ac3d703dceca05a941086dcf3ef5f6"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\Constants.kt": {
+    "mtime": 1777721338.2062457,
+    "hash": "221773780dec67923dffe537c43478d5"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\Coord.kt": {
+    "mtime": 1777785448.1190152,
+    "hash": "478b9c4a24f409584dcacdd5df65dbfd"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\Orientation.kt": {
+    "mtime": 1777721614.5427816,
+    "hash": "93a888fe431c39c23360338cf397fdcd"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\board\\Board.kt": {
+    "mtime": 1777785459.8918242,
+    "hash": "862aeee40877bd790c0b28245997ea96"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\board\\CellState.kt": {
+    "mtime": 1777723168.8362224,
+    "hash": "62af8eb76b1ce748c28577117c70ab1a"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\engine\\GameEngine.kt": {
+    "mtime": 1777723192.4511578,
+    "hash": "075e606bfcf4f07754df3a89bc6710e2"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\engine\\GameEvent.kt": {
+    "mtime": 1777723224.3584883,
+    "hash": "a4e5fb54f7692bad36774c23ce4bff9c"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\engine\\GameState.kt": {
+    "mtime": 1777723210.67214,
+    "hash": "e7a31af5473cef7f092b8d9c50a29451"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\engine\\GameStateMachine.kt": {
+    "mtime": 1779292615.1950493,
+    "hash": "071030ca68d91cfb0045cbe90faa0cca"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\model\\Game.kt": {
+    "mtime": 1777783855.333022,
+    "hash": "8aeb206b8f1b8a12571099c31edcec61"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\model\\GameMode.kt": {
+    "mtime": 1777783169.338509,
+    "hash": "f3e458dcc95dd637ae6604e85f04eea9"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\model\\GameResult.kt": {
+    "mtime": 1777783231.3848648,
+    "hash": "832333d97b09ee079473a558d6b18d45"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\model\\PlayerStats.kt": {
+    "mtime": 1777783335.118006,
+    "hash": "7b1683b038721128562b8e1bc9740e4b"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\model\\Shot.kt": {
+    "mtime": 1777783539.412199,
+    "hash": "8e5d87f63b5836b381d9c3d04bcc76b2"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\multiplayer\\FirebaseMatchRepository.kt": {
+    "mtime": 1779292746.4666722,
+    "hash": "fac7f1e0bcbdb0be6039c0f0e3e77455"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\multiplayer\\GameCreationResult.kt": {
+    "mtime": 1777783948.0206375,
+    "hash": "7d1c0ef312fed431596074f6b51e2a6d"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\multiplayer\\JoinResult.kt": {
+    "mtime": 1777783958.8274047,
+    "hash": "56244c80e3c9e12648e680ee8a7727b4"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\multiplayer\\MatchmakingError.kt": {
+    "mtime": 1777784063.947985,
+    "hash": "149dc615ae966e0f2ced2aea69c2be0a"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\multiplayer\\OnlineGameState.kt": {
+    "mtime": 1779295642.7321088,
+    "hash": "fb71027e0b57ccdcafa7857dcc88fa88"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\player\\Difficulty.kt": {
+    "mtime": 1777783874.685424,
+    "hash": "19d7d5c2505a8563c4f91f61744a8628"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\player\\PlayerSlot.kt": {
+    "mtime": 1777723244.0015807,
+    "hash": "465e00f8bf344055943f694dd6f2f4a7"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\player\\PlayerType.kt": {
+    "mtime": 1777783896.453696,
+    "hash": "96522e8d8fe6c33fd065fcc67dae27d8"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\repository\\GameRepository.kt": {
+    "mtime": 1777783908.3408282,
+    "hash": "5f2d65628c5beea213e0033c53b498b9"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\repository\\PreferencesRepository.kt": {
+    "mtime": 1779293345.128911,
+    "hash": "952b300b5b13ad3fee6efa8cec9d930c"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\repository\\StatsRepository.kt": {
+    "mtime": 1777783920.5833566,
+    "hash": "59ddd5b4c0d198a46899494f6a8418b7"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\ship\\PlacementValidator.kt": {
+    "mtime": 1777721698.7455547,
+    "hash": "5b56d683e3bea06c16d18fc3a4d20963"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\ship\\ShipDefinition.kt": {
+    "mtime": 1777721637.8766093,
+    "hash": "65e835743c88932a4404b3fe1a46d6ad"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\ship\\ShipId.kt": {
+    "mtime": 1777721621.8303916,
+    "hash": "2140211632d5eaddaa413a693be6e9f2"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\ship\\ShipPlacement.kt": {
+    "mtime": 1777723160.667314,
+    "hash": "d2597b710da03993aa0e939a0b4fb523"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\ship\\ShipRegistry.kt": {
+    "mtime": 1777721654.4629714,
+    "hash": "2813aafdaf36d71fb3a31d94bc0062fb"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\BoardTest.kt": {
+    "mtime": 1777784641.8157537,
+    "hash": "93c3f22150d2fe7a60ad630f20d8929f"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\CoordTest.kt": {
+    "mtime": 1777784636.0605567,
+    "hash": "7cb1775ab2b21785f1cfdef3cd9fcf59"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\GameEngineTest.kt": {
+    "mtime": 1777784706.6022677,
+    "hash": "d42d31c8f53154924a495c503ac4132e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\GameStateMachineTest.kt": {
+    "mtime": 1777784665.7013512,
+    "hash": "2ff00ac66c3df045faed8490f1743945"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\PlacementValidatorTest.kt": {
+    "mtime": 1777784656.9328763,
+    "hash": "d3c53787a7a84e626a9426a4b2f0d025"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\domain\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\domain\\ShipRegistryTest.kt": {
+    "mtime": 1777784648.6409752,
+    "hash": "76ac3d703dceca05a941086dcf3ef5f6"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\multiplayer\\build.gradle.kts": {
+    "mtime": 1779293374.1398122,
+    "hash": "881a8e250eef01dddbe4a07e2b85f9e0"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\multiplayer\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\multiplayer\\FirebaseSchema.kt": {
+    "mtime": 1777890119.9634402,
+    "hash": "ba6967bd20473fa30957509a78cf006c"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\multiplayer\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\multiplayer\\auth\\FirebaseAuthManager.kt": {
+    "mtime": 1777817122.229855,
+    "hash": "465bd6025ee3c0d0a8fd9f61a2f636ce"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\multiplayer\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\multiplayer\\di\\MultiplayerModule.kt": {
+    "mtime": 1779293123.0164056,
+    "hash": "3a30b4d6d8c2b9fc1e4396d40d1cb8df"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\multiplayer\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\multiplayer\\integrity\\PlayIntegrityManager.kt": {
+    "mtime": 1779293332.0992434,
+    "hash": "84c1ffec09e280b33e9a66f8f0805910"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\multiplayer\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\multiplayer\\mapper\\GameSyncMapper.kt": {
+    "mtime": 1777819256.858683,
+    "hash": "6b68811b0771e462f06fd39f1634223b"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\multiplayer\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\multiplayer\\matchmaking\\MatchmakingRepository.kt": {
+    "mtime": 1777891689.1903186,
+    "hash": "6d5caccc708c71b0fdffc590f9a2a079"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\multiplayer\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\multiplayer\\matchmaking\\RoomCodeGenerator.kt": {
+    "mtime": 1777817109.43089,
+    "hash": "d3360b199702bc3fda0a7ab320c02479"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\multiplayer\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\multiplayer\\repository\\FirebaseMatchRepositoryImpl.kt": {
+    "mtime": 1779292784.4699476,
+    "hash": "f94f224ddeae1abf0289fedb619226f7"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\multiplayer\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\multiplayer\\FirebaseMatchRepositoryTest.kt": {
+    "mtime": 1777828760.5480745,
+    "hash": "6397916b8503d63c0f4e20827f33bf4d"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\multiplayer\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\multiplayer\\RoomCodeGeneratorTest.kt": {
+    "mtime": 1777715926.8923373,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\testing\\build.gradle.kts": {
+    "mtime": 1777716269.01644,
+    "hash": "1532dfb81a494e58d1877141849e9cf2"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\testing\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\testing\\BoardBuilder.kt": {
+    "mtime": 1777784597.1835506,
+    "hash": "1766e713ddfa9433bf87b5289df49975"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\testing\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\testing\\FakeFirebaseDatabase.kt": {
+    "mtime": 1779293210.0062523,
+    "hash": "5799144062e52044e522a28c25de29c4"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\testing\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\testing\\FakeGameRepository.kt": {
+    "mtime": 1777784580.946658,
+    "hash": "26ec9930648b4b0e849938391667397c"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\testing\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\testing\\FakePreferencesRepository.kt": {
+    "mtime": 1779293365.1762366,
+    "hash": "a3c04d0d3ae1d5e51c15cb4d4aa7de38"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\testing\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\testing\\FakeStatsRepository.kt": {
+    "mtime": 1777784572.6227014,
+    "hash": "0fe2d33f9e5c29f7253780fe8739666b"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\testing\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\testing\\GameBuilder.kt": {
+    "mtime": 1777784587.9247901,
+    "hash": "474c3e16ab96b6b7b381982c26d9c16c"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\testing\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\testing\\MainDispatcherRule.kt": {
+    "mtime": 1777828710.1877766,
+    "hash": "1349a7e8ea646f69cd430db548c80416"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\testing\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\testing\\TestDispatcherProvider.kt": {
+    "mtime": 1777715928.2592587,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\build.gradle.kts": {
+    "mtime": 1777859235.720984,
+    "hash": "f1807ccb5c33d15fef8e4a6c9253c98d"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\adaptive\\AdaptiveLayoutHelpers.kt": {
+    "mtime": 1777814950.6663716,
+    "hash": "8ed4e78c157ac48d76fe7878da258694"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\animation\\AnimatedNavyWave.kt": {
+    "mtime": 1777814896.238446,
+    "hash": "a501ff5472af28cec7841376b5e7cfe9"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\animation\\HitExplosionAnimation.kt": {
+    "mtime": 1778691378.7742722,
+    "hash": "4e4b1f1b0be12ade7601f7ca49fbc4ff"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\animation\\MissSplashAnimation.kt": {
+    "mtime": 1778691391.1393418,
+    "hash": "3c5ccbe7aa770cb9d4a55071852b4441"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\animation\\ShipSunkAnimation.kt": {
+    "mtime": 1777814933.2524946,
+    "hash": "35b589bccab498d02b54d345fa0bd4ff"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\components\\AdBannerView.kt": {
+    "mtime": 1777814813.3800879,
+    "hash": "adcbbc5337cd196a55ddef1085b39d77"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\components\\BattleshipButton.kt": {
+    "mtime": 1777814771.190667,
+    "hash": "e7072b2b4f7d5fa77ac215e6bf6f1220"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\components\\GameCell.kt": {
+    "mtime": 1777858150.8053443,
+    "hash": "f607808f0d1c6f0899b3dc9518dc81bf"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\components\\GameGrid.kt": {
+    "mtime": 1778689184.543289,
+    "hash": "b165f0a0086d6dc3cce9c10ca4a676c3"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\components\\GridCoordLabels.kt": {
+    "mtime": 1777814828.4304812,
+    "hash": "9fd0e14235e1321adcb76707e2930ae0"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\components\\NavyCard.kt": {
+    "mtime": 1777814791.2054949,
+    "hash": "8ccfa8402b30252f5d3a9478f4dcafb9"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\haptic\\HapticManager.kt": {
+    "mtime": 1777858825.726193,
+    "hash": "3b1efac221be045e09ae14778044cc31"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\model\\BoardViewState.kt": {
+    "mtime": 1777814658.3560126,
+    "hash": "0ef9986b802562f5a533aaca5cdf79dc"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\model\\CellDisplayState.kt": {
+    "mtime": 1777814586.7152176,
+    "hash": "3bc6f18e6a0387b8effee8d04c5c33f1"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\model\\CellViewState.kt": {
+    "mtime": 1777814602.248365,
+    "hash": "67940e20cb0f5e75a26f61165d4634ac"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\model\\ShipPlacementViewState.kt": {
+    "mtime": 1777814631.167092,
+    "hash": "9c992fc63e1e90e5aa6755f271e0483f"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\modifier\\PressScaleModifier.kt": {
+    "mtime": 1777814680.9705055,
+    "hash": "f364ce09af59c9c06be7dc2a3366e5b2"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\sound\\SoundManager.kt": {
+    "mtime": 1777857869.132503,
+    "hash": "63bb3d64ba491942f6342aa83998f82c"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\theme\\BattleshipTheme.kt": {
+    "mtime": 1777868568.4081767,
+    "hash": "8ad6c6ee5c28d320af38f6d42cb79946"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\theme\\Color.kt": {
+    "mtime": 1777868557.3307977,
+    "hash": "5b2c427351d84b1c943af4e261878d18"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\theme\\Shape.kt": {
+    "mtime": 1777716386.0353253,
+    "hash": "ad3733a07a87c9b142c69a5891488ead"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\theme\\Typography.kt": {
+    "mtime": 1779297621.1204126,
+    "hash": "8060f07bae7bbba0a053e882ad221bf2"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\navigation\\Routes.kt": {
+    "mtime": 1778762852.0300355,
+    "hash": "223ccbc010ee79f86eabc89c19443c8a"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\BoardViewStateTest.kt": {
+    "mtime": 1777715927.6464963,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\core\\ui\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\core\\ui\\GameCellTest.kt": {
+    "mtime": 1777715927.6269526,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\build.gradle.kts": {
+    "mtime": 1777825930.0141864,
+    "hash": "1c71621e8a3fc85993e5c5dde037c177"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\battle\\BattleScreen.kt": {
+    "mtime": 1779296865.0486026,
+    "hash": "bb4c8287918abd4d95220a34ae6f7ceb"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\battle\\BattleViewModel.kt": {
+    "mtime": 1778762903.6705499,
+    "hash": "8100ca2fb9fc3d541a303667392568bb"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\components\\AimReticle.kt": {
+    "mtime": 1777815752.1256113,
+    "hash": "f800e2d76c0e072ed99ed5c7cc37ea6f"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\components\\BattleGrid.kt": {
+    "mtime": 1777815735.882123,
+    "hash": "4fa14e38bd6e47394a25b6f866fb0115"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\components\\OpponentThinkingOverlay.kt": {
+    "mtime": 1777820145.9769697,
+    "hash": "96d1d7e92ee63786e5930e211bc1f13d"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\components\\PlayerStatusBar.kt": {
+    "mtime": 1777815783.0106597,
+    "hash": "48f102c33deb70d800cd225897f21071"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\gameover\\GameOverScreen.kt": {
+    "mtime": 1778761689.4472241,
+    "hash": "0663a86935b3c84c9a503ad8a57a3abe"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\gameover\\GameOverViewModel.kt": {
+    "mtime": 1778761676.7610965,
+    "hash": "1b982be954e5c96e23aec1bb12ffb2f4"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\gameover\\PassAndPlayGameOverScreen.kt": {
+    "mtime": 1778763059.6721964,
+    "hash": "e11016bf1f14ecb2f5c8be1fe098f4f8"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\gameover\\PassAndPlayGameOverViewModel.kt": {
+    "mtime": 1778762962.8444946,
+    "hash": "37fdd66607bd432eeb0ebeddc79abb63"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\handoff\\HandOffScreen.kt": {
+    "mtime": 1779297330.3933349,
+    "hash": "cdbbe8fa00320b2c3839622d6b8179b7"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\handoff\\HandOffViewModel.kt": {
+    "mtime": 1777815655.000239,
+    "hash": "af19cf35f32b9491526118448a4c986a"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\online\\OnlineBattleScreen.kt": {
+    "mtime": 1778760639.3637903,
+    "hash": "0f2390e4ea73125f768aded127fc0941"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\online\\OnlineGameViewModel.kt": {
+    "mtime": 1779298005.1843603,
+    "hash": "b2e71533e3f0f5506621050281ef48a5"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\passandplay\\PassAndPlayViewModel.kt": {
+    "mtime": 1777815795.8875537,
+    "hash": "3353cde39dd79ddf6cebd08aada8a51e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\BattleViewModelTest.kt": {
+    "mtime": 1777715923.9788356,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\GameOverViewModelTest.kt": {
+    "mtime": 1777715924.0459895,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\HandOffViewModelTest.kt": {
+    "mtime": 1777715924.023983,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\OnlineGameViewModelTest.kt": {
+    "mtime": 1779293314.1082704,
+    "hash": "c8f7afeb012d269cea712a92636390f0"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\game\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\feature\\game\\PassAndPlayViewModelTest.kt": {
+    "mtime": 1777715924.0023806,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\lobby\\build.gradle.kts": {
+    "mtime": 1777825921.0197444,
+    "hash": "64bad184b2bde246dd208bb3bc8f87ce"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\lobby\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\lobby\\LobbyViewModel.kt": {
+    "mtime": 1777887744.5135112,
+    "hash": "11cae069165840e57205649a2867dec4"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\lobby\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\lobby\\OnlineLobbyScreen.kt": {
+    "mtime": 1777887776.1923223,
+    "hash": "44e34e7a73b2b322abda8a663ce600d9"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\lobby\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\lobby\\RoomCodeDisplay.kt": {
+    "mtime": 1777815855.264844,
+    "hash": "9ffc6967ef96cf65985e51a5594351c3"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\lobby\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\lobby\\WaitingForOpponentScreen.kt": {
+    "mtime": 1777891745.7656374,
+    "hash": "7d0cfd76e4ea34794191130c791f97cb"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\lobby\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\lobby\\WaitingForOpponentViewModel.kt": {
+    "mtime": 1777891736.3272781,
+    "hash": "674b6b37d9a5ca384939dd4e3d0de7a6"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\lobby\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\feature\\lobby\\LobbyViewModelTest.kt": {
+    "mtime": 1777817760.991745,
+    "hash": "6aca579539c959c97eb8eefb4bf490dd"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\menu\\build.gradle.kts": {
+    "mtime": 1777825911.2281122,
+    "hash": "5221cd5cd600ea2577803132ecd92762"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\menu\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\menu\\DifficultyScreen.kt": {
+    "mtime": 1777815171.4518912,
+    "hash": "4d7f3d28be00b8acccb8d293e5c8d169"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\menu\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\menu\\DifficultyViewModel.kt": {
+    "mtime": 1777815148.2627058,
+    "hash": "d072cb12591fa8376b0aa034e35e7d8d"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\menu\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\menu\\MainMenuScreen.kt": {
+    "mtime": 1779296036.223239,
+    "hash": "25a8b4a88067b90c23e6060822ca91aa"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\menu\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\menu\\MenuViewModel.kt": {
+    "mtime": 1777814971.653687,
+    "hash": "7b3540385e688688aa88d72a90aa1d2a"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\menu\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\menu\\ModeSelectScreen.kt": {
+    "mtime": 1777815053.3474245,
+    "hash": "78d6e859fe25fbbe4fd4789f22944ae2"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\menu\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\menu\\ModeSelectViewModel.kt": {
+    "mtime": 1777815025.8953512,
+    "hash": "8faf4d666fe1488c28bddd6da1a7d0d8"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\menu\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\menu\\PlayerNamesScreen.kt": {
+    "mtime": 1777867412.2255783,
+    "hash": "4364f7ace8ae627ed1a68601dc81eb57"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\menu\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\menu\\PlayerNamesViewModel.kt": {
+    "mtime": 1777867402.610393,
+    "hash": "2b4c849cd93e5ee95068d8a34333b96e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\menu\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\feature\\menu\\MenuViewModelTest.kt": {
+    "mtime": 1777715923.199747,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\menu\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\feature\\menu\\ModeSelectViewModelTest.kt": {
+    "mtime": 1777715923.2247818,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\settings\\build.gradle.kts": {
+    "mtime": 1777819683.5485578,
+    "hash": "a434553a5807e59781c642925515fcf8"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\settings\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\settings\\SettingsScreen.kt": {
+    "mtime": 1777815390.7065196,
+    "hash": "3cc72f002fb36a10175b3857ec92e2da"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\settings\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\settings\\SettingsViewModel.kt": {
+    "mtime": 1777815291.7564714,
+    "hash": "905e2f529a745b292d25495175ef5699"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\settings\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\feature\\settings\\SettingsViewModelTest.kt": {
+    "mtime": 1777715924.5598273,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\setup\\build.gradle.kts": {
+    "mtime": 1778225588.3704915,
+    "hash": "942df5eb52800326622f5aee48d65342"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\setup\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\setup\\PlacementViewModel.kt": {
+    "mtime": 1778658675.9551134,
+    "hash": "2bd2904dd7617d7d483b02ea51bf7239"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\setup\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\setup\\ShipPlacementScreen.kt": {
+    "mtime": 1778690625.7608702,
+    "hash": "d0b57f602cbded3844ad72b6f6fbbcc5"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\setup\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\setup\\components\\DraggableShipItem.kt": {
+    "mtime": 1777815532.893049,
+    "hash": "07654dec7d0d9efdc3a55b6bfa2c8c95"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\setup\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\setup\\components\\PlacementGrid.kt": {
+    "mtime": 1777815548.51087,
+    "hash": "ec5b17afbb7fccc928997425862e661d"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\setup\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\setup\\components\\ShipTray.kt": {
+    "mtime": 1777815561.7528074,
+    "hash": "2a7e579d22d64723b0eeb5f2f37ea6b7"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\setup\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\setup\\gestures\\DragGestureHandler.kt": {
+    "mtime": 1777815581.3056364,
+    "hash": "c7192bb33988135dab97fdf9cfd3781c"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\setup\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\feature\\setup\\PlacementValidationTest.kt": {
+    "mtime": 1777715923.518304,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\setup\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\feature\\setup\\PlacementViewModelTest.kt": {
+    "mtime": 1777715923.4992127,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\stats\\build.gradle.kts": {
+    "mtime": 1777716170.7770026,
+    "hash": "29425fdf22feaaff48bf9b94036ffedc"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\stats\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\stats\\StatisticsScreen.kt": {
+    "mtime": 1777815273.1439605,
+    "hash": "cb2655a6e8466514bf96c3e1a7dacceb"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\stats\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\feature\\stats\\StatsViewModel.kt": {
+    "mtime": 1777815229.3926506,
+    "hash": "ae731908086b199ff17bf626fb0691bd"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\feature\\stats\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\feature\\stats\\StatsViewModelTest.kt": {
+    "mtime": 1777715924.3940809,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\app\\build.gradle.kts": {
+    "mtime": 1779294425.1211607,
+    "hash": "2680b09bfee2fa348d44b9b406e87fc8"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\app\\src\\debug\\kotlin\\com\\battleship\\fleetcommand\\DebugApplication.kt": {
+    "mtime": 1777887157.1304166,
+    "hash": "a30916f03fd91297bcc4cf6fb3888171"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\app\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\BattleshipApplication.kt": {
+    "mtime": 1779294809.0814202,
+    "hash": "68d5cd6ca923ba6635782b77bcdb58ab"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\app\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\MainActivity.kt": {
+    "mtime": 1777716308.5602279,
+    "hash": "09339d021f71b2d090b56321ff356cb9"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\app\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\di\\AppModule.kt": {
+    "mtime": 1777816953.2444024,
+    "hash": "7df6e0780afe4275a819aa08e1758a0c"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\app\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\di\\DatabaseModule.kt": {
+    "mtime": 1779293264.3767836,
+    "hash": "1b59fcdbbe8e7d346641fa867fb017d7"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\app\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\di\\RepositoryModule.kt": {
+    "mtime": 1777816969.1861663,
+    "hash": "c9961d4e87ef460effa0000d61639522"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\app\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\games\\AchievementIds.kt": {
+    "mtime": 1777858135.542237,
+    "hash": "7d16b7f282de183ad54deb35d810fd23"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\app\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\games\\PlayGamesManager.kt": {
+    "mtime": 1777858595.0617375,
+    "hash": "78aefed484e16f8b47383b863f43bff6"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\app\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\navigation\\BattleshipNavHost.kt": {
+    "mtime": 1778763469.3353448,
+    "hash": "8886fa10d48418ab5f140f39ec419a04"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\app\\src\\main\\kotlin\\com\\battleship\\fleetcommand\\navigation\\Routes.kt": {
+    "mtime": 1777825765.3647194,
+    "hash": "ade70b0e76aad927bf62f5c56a510df4"
+  },
+  "C:\\Users\\daasa\\OneDrive\\Desktop\\Projects\\Battleship_android\\app\\src\\test\\kotlin\\com\\battleship\\fleetcommand\\NavigationTest.kt": {
+    "mtime": 1777715922.9216244,
+    "hash": "d41d8cd98f00b204e9800998ecf8427e"
+  }
+}

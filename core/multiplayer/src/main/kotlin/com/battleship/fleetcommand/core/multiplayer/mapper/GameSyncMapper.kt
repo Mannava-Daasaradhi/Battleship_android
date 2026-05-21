@@ -108,6 +108,7 @@ class GameSyncMapper @Inject constructor() {
      */
     fun mapShotSnapshot(snapshot: DataSnapshot): ShotData? {
         return try {
+            val pushKey = snapshot.key ?: ""
             val row = snapshot.child(FirebaseSchema.SHOT_ROW).getValue(Int::class.java)
                 ?: return null
             val col = snapshot.child(FirebaseSchema.SHOT_COL).getValue(Int::class.java)
@@ -125,6 +126,7 @@ class GameSyncMapper @Inject constructor() {
                 result = resultStr?.toFireResult(),
                 shipId = shipIdStr,
                 timestamp = timestamp,
+                pushKey = pushKey,
             )
         } catch (e: Exception) {
             Timber.w(e, "GameSyncMapper: failed to map shot at ${snapshot.ref.path}")

@@ -5,7 +5,10 @@
       "Bash(findstr /I /C:\"AndroidRuntime\" /C:\"FATAL\" /C:\"battleship\")",
       "Bash(rm \"C:\\\\Users\\\\daasa\\\\AppData\\\\Local\\\\Temp\\\\logcat.txt\")",
       "Bash(del \"CUsersdaasaAppDataLocalTemplogcat.txt\")",
-      "Bash(./gradlew :app:assembleDebug -q)"
+      "Bash(./gradlew :app:assembleDebug -q)",
+      "Bash(./gradlew :feature:game:compileDebugKotlin :core:multiplayer:compileDebugKotlin :core:testing:compileDebugKotlin)",
+      "Bash(./gradlew :feature:game:test :core:multiplayer:test)",
+      "Bash(./gradlew test *)"
     ]
   }
 }
