@@ -15,6 +15,7 @@ import kotlinx.serialization.Serializable
     val gameId: String = "",
     val player1Name: String = "Player 1",
     val player2Name: String = "Player 2",
+    val difficulty: String = "",  // AI mode only — Difficulty.name (EASY/MEDIUM/HARD); blank otherwise
 )
 @Serializable data class BattleRoute(val gameId: String)
 

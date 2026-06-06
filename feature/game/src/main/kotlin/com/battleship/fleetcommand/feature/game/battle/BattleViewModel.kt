@@ -6,6 +6,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
+import com.battleship.fleetcommand.core.ai.AiTurnProcessor
 import com.battleship.fleetcommand.core.domain.Coord
 import com.battleship.fleetcommand.core.domain.GameConstants
 import com.battleship.fleetcommand.core.domain.engine.FireResult
@@ -105,6 +106,9 @@ class BattleViewModel @Inject constructor(
     private var isProcessingShot = false
     private var shotIndex = 0
 
+    /** Difficulty-aware AI brain (Easy random / Medium hunt-target / Hard heat map). AI mode only. */
+    private var aiProcessor: AiTurnProcessor? = null
+
     private var gameMode: GameMode = GameMode.AI
     private var p1Name: String = "Player 1"
     private var p2Name: String = "Player 2"
@@ -142,6 +146,7 @@ class BattleViewModel @Inject constructor(
                 refreshPassAndPlayBoards()
             }
             GameMode.AI -> {
+                aiProcessor = AiTurnProcessor.forDifficulty(game?.difficulty ?: Difficulty.MEDIUM)
                 myPlacements = gameRepository.getBoardState(gameId, PlayerSlot.ONE) ?: emptyList()
                 val storedAi = gameRepository.getBoardState(gameId, PlayerSlot.TWO)
                 aiPlacements = storedAi ?: generateAiPlacements().also { placements ->
@@ -333,14 +338,19 @@ class BattleViewModel @Inject constructor(
         }
     }
 
+    /** Random untried cell — fallback only if the AI processor is somehow absent. */
+    private fun randomUnshotCoord(): Coord {
+        var candidate: Coord
+        do {
+            candidate = Coord((0 until GameConstants.TOTAL_CELLS).random())
+        } while (candidate in aiShotHistory)
+        return candidate
+    }
+
     private suspend fun performAiShot() {
+        val processor = aiProcessor
         val coord = withContext(Dispatchers.Default) {
-            var candidate: Coord
-            do {
-                val idx = (0 until GameConstants.TOTAL_CELLS).random()
-                candidate = Coord(idx)
-            } while (candidate in aiShotHistory)
-            candidate
+            processor?.nextShot(myPlacements, aiShotHistory) ?: randomUnshotCoord()
         }
 
         aiShotHistory.add(coord)
@@ -349,6 +359,13 @@ class BattleViewModel @Inject constructor(
         val outcome = withContext(Dispatchers.Default) {
             gameEngine.fireShot(coord, myPlacements, aiShotHistory - coord)
         }.getOrElse { ShotOutcome.Miss }
+
+        // Feed the result back so Medium (hunt/target) and Hard (heat map) tiers adapt.
+        // aiShotHistory already includes coord, so the rebuilt knowledge board is current.
+        val sunkShipId = (outcome as? ShotOutcome.Sunk)?.shipId
+        withContext(Dispatchers.Default) {
+            processor?.recordResult(coord, outcome.toFireResult(), sunkShipId, myPlacements, aiShotHistory)
+        }
 
         gameRepository.saveShot(
             gameId,

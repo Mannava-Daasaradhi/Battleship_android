@@ -11,6 +11,7 @@ import com.battleship.fleetcommand.core.domain.GameConstants
 import com.battleship.fleetcommand.core.domain.Orientation
 import com.battleship.fleetcommand.core.domain.model.GameMode
 import com.battleship.fleetcommand.core.domain.multiplayer.FirebaseMatchRepository
+import com.battleship.fleetcommand.core.domain.player.Difficulty
 import com.battleship.fleetcommand.core.domain.player.PlayerSlot
 import com.battleship.fleetcommand.core.domain.repository.GameRepository
 import com.battleship.fleetcommand.core.domain.repository.PreferencesRepository
@@ -56,6 +57,10 @@ class PlacementViewModel @Inject constructor(
 
     private val p1Name = route.player1Name.ifBlank { "Player 1" }
     private val p2Name = route.player2Name.ifBlank { "Player 2" }
+
+    /** AI difficulty chosen on the previous screen; null for non-AI modes (blank route value). */
+    private val difficulty: Difficulty? =
+        route.difficulty.takeIf { it.isNotBlank() }?.let { Difficulty.fromStorageKey(it) }
 
     @Immutable
     data class UiState(
@@ -251,6 +256,7 @@ class PlacementViewModel @Inject constructor(
                             player2Name  = "AI",
                             id           = java.util.UUID.randomUUID().toString(),
                             startedAt    = System.currentTimeMillis(),
+                            difficulty   = difficulty ?: Difficulty.MEDIUM,
                         )
                     )
                     gameRepository.saveBoardState(gameId, PlayerSlot.ONE, _uiState.value.placements)

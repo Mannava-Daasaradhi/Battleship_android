@@ -31,7 +31,9 @@ fun DifficultyScreen(
         viewModel.uiEffect.collectLatest { effect ->
             when (effect) {
                 is DifficultyViewModel.UiEffect.NavigateToPlacement ->
-                    navController.navigate(ShipPlacementRoute(mode = effect.mode))
+                    navController.navigate(
+                        ShipPlacementRoute(mode = effect.mode, difficulty = effect.difficulty)
+                    )
             }
         }
     }
