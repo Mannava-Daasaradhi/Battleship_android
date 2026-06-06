@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SoundManager loads every audio asset dynamically via
+  resources.getIdentifier(name, "raw", packageName), so there is no static
+  R.raw.* reference for the resource shrinker to follow. With
+  isShrinkResources=true on the release build these files would be stripped
+  from the APK, leaving the shipped game completely silent. Keep them all.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/bgm_naval_theme,@raw/sfx_cannon_fire,@raw/sfx_water_splash,@raw/sfx_explosion,@raw/sfx_ship_sunk,@raw/sfx_victory,@raw/sfx_defeat,@raw/sfx_ui_click,@raw/sfx_ship_place,@raw/sfx_tick" />

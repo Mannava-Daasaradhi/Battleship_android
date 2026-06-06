@@ -7,7 +7,7 @@
         These are the *real* public hashes published by Google — copy verbatim.
         Source: https://developer.android.com/develop/ui/views/text-and-emoji/downloadable-fonts
 -->
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools" tools:ignore="Typos">
     <string-array name="com_google_android_gms_fonts_certs">
         <item>@array/com_google_android_gms_fonts_certs_dev</item>
         <item>@array/com_google_android_gms_fonts_certs_prod</item>
