@@ -82,6 +82,7 @@ fun BattleScreen(
                             mode = "LOCAL",
                             isP1HandOff = effect.isP1Turn,
                             phase = "BATTLE",
+                            toPlayerName = effect.toPlayerName,
                         )
                     )
                 }

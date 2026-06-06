@@ -34,6 +34,7 @@ import kotlinx.serialization.Serializable
     val mode: String = "",
     val isP1HandOff: Boolean = false,
     val phase: String = "SETUP",
+    val toPlayerName: String = "",  // name of the player receiving the device (Pass & Play)
 )
 
 @Serializable data class GameOverRoute(

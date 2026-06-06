@@ -5,9 +5,14 @@
 package com.battleship.fleetcommand.feature.game.handoff
 
 import androidx.compose.runtime.Immutable
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.navigation.toRoute
 import com.battleship.fleetcommand.core.domain.GameConstants
+import com.battleship.fleetcommand.core.ui.haptic.HapticEvent
+import com.battleship.fleetcommand.core.ui.haptic.HapticManager
+import com.battleship.fleetcommand.navigation.HandOffRoute
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -21,7 +26,12 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
-class HandOffViewModel @Inject constructor() : ViewModel() {
+class HandOffViewModel @Inject constructor(
+    savedStateHandle: SavedStateHandle,
+    private val hapticManager: HapticManager,
+) : ViewModel() {
+
+    private val route: HandOffRoute = savedStateHandle.toRoute()
 
     @Immutable
     data class UiState(
@@ -39,7 +49,9 @@ class HandOffViewModel @Inject constructor() : ViewModel() {
         data object NavigateToNextScreen : UiEffect()
     }
 
-    private val _uiState = MutableStateFlow(UiState())
+    private val _uiState = MutableStateFlow(
+        UiState(toPlayer = route.toPlayerName.ifBlank { "the next player" })
+    )
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     private val _uiEffect = MutableSharedFlow<UiEffect>(replay = 0)
@@ -54,10 +66,12 @@ class HandOffViewModel @Inject constructor() : ViewModel() {
             var remaining = GameConstants.HANDOFF_COUNTDOWN_SECS
             while (remaining > 0) {
                 _uiState.update { it.copy(countdown = remaining) }
+                hapticManager.perform(HapticEvent.COUNTDOWN_TICK)
                 delay(1_000L)
                 remaining--
             }
             _uiState.update { it.copy(countdown = 0, canProceed = true) }
+            hapticManager.perform(HapticEvent.HAND_OFF_GO)
         }
     }
 

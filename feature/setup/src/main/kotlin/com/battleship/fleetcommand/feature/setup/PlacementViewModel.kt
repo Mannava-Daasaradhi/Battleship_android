@@ -97,6 +97,7 @@ class PlacementViewModel @Inject constructor(
             val gameId: String,
             val isP1HandOff: Boolean = false,
             val phase: String = "SETUP",
+            val toPlayerName: String = "",
         ) : UiEffect()
         data class ShowPlacementError(val error: PlacementError) : UiEffect()
         data class ShowError(val message: String) : UiEffect()
@@ -275,11 +276,11 @@ class PlacementViewModel @Inject constructor(
                             )
                         )
                         gameRepository.saveBoardState(gameId, PlayerSlot.ONE, _uiState.value.placements)
-                        _uiEffect.emit(UiEffect.NavigateToHandOff(gameId, isP1HandOff = true, phase = "SETUP"))
+                        _uiEffect.emit(UiEffect.NavigateToHandOff(gameId, isP1HandOff = true, phase = "SETUP", toPlayerName = p2Name))
                     } else {
                         val gameId = route.gameId
                         gameRepository.saveBoardState(gameId, PlayerSlot.TWO, _uiState.value.placements)
-                        _uiEffect.emit(UiEffect.NavigateToHandOff(gameId, isP1HandOff = false, phase = "SETUP"))
+                        _uiEffect.emit(UiEffect.NavigateToHandOff(gameId, isP1HandOff = false, phase = "SETUP", toPlayerName = p1Name))
                     }
                 }
 

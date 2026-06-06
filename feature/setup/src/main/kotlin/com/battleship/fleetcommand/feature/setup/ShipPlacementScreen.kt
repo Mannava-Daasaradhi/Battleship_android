@@ -146,10 +146,11 @@ fun ShipPlacementScreen(
                 is PlacementViewModel.UiEffect.NavigateToHandOff ->
                     navController.navigate(
                         HandOffRoute(
-                            gameId      = effect.gameId,
-                            mode        = route.mode,
-                            isP1HandOff = effect.isP1HandOff,
-                            phase       = effect.phase,
+                            gameId       = effect.gameId,
+                            mode         = route.mode,
+                            isP1HandOff  = effect.isP1HandOff,
+                            phase        = effect.phase,
+                            toPlayerName = effect.toPlayerName,
                         )
                     )
                 is PlacementViewModel.UiEffect.ShowPlacementError -> { }
