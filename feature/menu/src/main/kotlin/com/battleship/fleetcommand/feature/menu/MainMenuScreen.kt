@@ -69,6 +69,7 @@ fun MainMenuScreen(
     )
     LaunchedEffect(Unit) { revealed = true }
 
+    // ADS PLACEHOLDER — owner will integrate AdMob here in a future update
     Scaffold(modifier = Modifier.safeDrawingPadding()) { paddingValues ->
         Box(
             modifier = Modifier

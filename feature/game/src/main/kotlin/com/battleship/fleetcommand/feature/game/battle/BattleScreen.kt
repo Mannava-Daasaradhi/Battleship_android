@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
+import com.battleship.fleetcommand.core.ui.animation.ShipSunkAnimation
 import com.battleship.fleetcommand.core.ui.components.GameGrid
 import com.battleship.fleetcommand.core.ui.model.CellViewState
 import com.battleship.fleetcommand.core.ui.theme.NavyBackground
@@ -43,6 +44,7 @@ fun BattleScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var showResignDialog by remember { mutableStateOf(false) }
+    var sunkAnimationVisible by remember { mutableStateOf(false) }
 
     // ── Pass & Play turn-resume via SavedStateHandle ────────────────────────
     // FIX: Instead of using LaunchedEffect(value) as the key (which misses
@@ -90,6 +92,7 @@ fun BattleScreen(
                 is BattleViewModel.UiEffect.ShowHitAnimation  -> { }
                 is BattleViewModel.UiEffect.ShowMissAnimation -> { }
                 is BattleViewModel.UiEffect.ShowSunkAnimation -> {
+                    sunkAnimationVisible = true
                     val shipName = effect.shipId.name
                         .lowercase().replaceFirstChar { it.uppercase() }
                     val message = if (uiState.mode == com.battleship.fleetcommand.core.domain.model.GameMode.LOCAL) {
@@ -178,6 +181,12 @@ fun BattleScreen(
                 )
                 if (uiState.isAiThinking) {
                     AiThinkingDotsOverlay(modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp))
+                }
+                if (sunkAnimationVisible) {
+                    ShipSunkAnimation(
+                        onComplete = { sunkAnimationVisible = false },
+                        modifier = Modifier.align(Alignment.Center),
+                    )
                 }
             }
             HorizontalDivider()
