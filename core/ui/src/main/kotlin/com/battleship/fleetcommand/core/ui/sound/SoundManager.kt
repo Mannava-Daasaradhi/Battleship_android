@@ -2,7 +2,7 @@
 // Section 10 — Sound Architecture
 package com.battleship.fleetcommand.core.ui.sound
 
-import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.MediaPlayer
@@ -152,9 +152,17 @@ class SoundManager @Inject constructor(
                 setVolume(0f, 0f)
                 start()
             }
-            // Fade in
-            musicPlayer?.let {
-                ObjectAnimator.ofFloat(it, "volumeFloat", 0f, 0.4f).setDuration(1000).start()
+            // Fade in — MediaPlayer has no single-float volume property, so animate it
+            // manually via setVolume(left, right) rather than a (non-existent) setter.
+            musicPlayer?.let { player ->
+                ValueAnimator.ofFloat(0f, 0.4f).apply {
+                    duration = 1000
+                    addUpdateListener { anim ->
+                        val v = anim.animatedValue as Float
+                        player.setVolume(v, v)
+                    }
+                    start()
+                }
             }
         } catch (e: Exception) {
             Timber.w(e, "SoundManager: failed to start background music")
@@ -163,8 +171,12 @@ class SoundManager @Inject constructor(
 
     private fun stopMusic() {
         val mp = musicPlayer ?: return
-        ObjectAnimator.ofFloat(mp, "volumeFloat", 0.4f, 0f).apply {
+        ValueAnimator.ofFloat(0.4f, 0f).apply {
             duration = 1000
+            addUpdateListener { anim ->
+                val v = anim.animatedValue as Float
+                mp.setVolume(v, v)
+            }
             addListener(object : android.animation.AnimatorListenerAdapter() {
                 override fun onAnimationEnd(animation: android.animation.Animator) {
                     mp.pause()

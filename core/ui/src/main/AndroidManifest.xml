@@ -1,2 +1,6 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<manifest />
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- HapticManager drives the system Vibrator; declare the permission in the
+         module that uses it so it merges into any consuming app. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+</manifest>

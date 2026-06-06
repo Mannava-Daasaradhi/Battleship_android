@@ -97,7 +97,7 @@ class GameSyncMapper @Inject constructor() {
                     .getValue(Long::class.java) ?: 0L,
             )
         } catch (e: Exception) {
-            Timber.w(e, "GameSyncMapper: failed to map player data at ${snapshot.ref.path}")
+            Timber.w(e, "GameSyncMapper: failed to map player data at ${snapshot.ref}")
             null
         }
     }
@@ -129,7 +129,7 @@ class GameSyncMapper @Inject constructor() {
                 pushKey = pushKey,
             )
         } catch (e: Exception) {
-            Timber.w(e, "GameSyncMapper: failed to map shot at ${snapshot.ref.path}")
+            Timber.w(e, "GameSyncMapper: failed to map shot at ${snapshot.ref}")
             null
         }
     }
