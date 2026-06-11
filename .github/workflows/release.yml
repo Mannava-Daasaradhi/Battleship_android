@@ -90,6 +90,13 @@ jobs:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
+          # versionCode must be strictly increasing across releases — Play Store
+          # rejects any versionCode it has already seen. github.run_number is
+          # monotonic per workflow, so every tagged release gets a fresh code.
+          # versionName is derived from the tag (v1.2.3 -> 1.2.3).
+          export VERSION_CODE="${{ github.run_number }}"
+          export VERSION_NAME="${GITHUB_REF_NAME#v}"
+          echo "Building versionCode=$VERSION_CODE versionName=$VERSION_NAME"
           ./gradlew bundleRelease \
             -Pandroid.injected.signing.store.file=app/release.keystore \
             -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \

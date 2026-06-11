@@ -2,18 +2,31 @@
  * Battleship Fleet Command — Firebase Cloud Functions
  *
  * Server-side game logic that cannot be trusted to clients:
- *   1. resolveShot   — reads defender's board, resolves hit/miss/sunk, writes result + flips turn
- *   2. claimVictory  — verifies all opponent ships are sunk before declaring a winner
- *   3. forfeit       — sets opponent as winner
+ *   1. resolveShot       — reads defender's board, resolves hit/miss/sunk, writes result + flips turn
+ *   2. claimVictory      — verifies all opponent ships are sunk before declaring a winner
+ *   3. forfeit           — sets opponent as winner
+ *   4. cleanupStaleGames — scheduled hourly: deletes abandoned/finished games and frees room codes
  *
  * Deploy: firebase deploy --only functions
  */
 
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { logger } = require("firebase-functions/v2");
 const { initializeApp } = require("firebase-admin/app");
 const { getDatabase } = require("firebase-admin/database");
 
 initializeApp();
+
+// ── App Check enforcement ────────────────────────────────────────────────────
+//
+// Set to true ONLY after:
+//   1. The Android app ships with the App Check SDK (Play Integrity provider),
+//   2. Firebase Console → App Check metrics show ~100% verified requests.
+// Flipping this early will reject every call from app versions without App Check.
+const ENFORCE_APP_CHECK = false;
+
+const CALLABLE_OPTS = { enforceAppCheck: ENFORCE_APP_CHECK };
 
 // ── Ship definitions (must match ShipRegistry.ALL in Kotlin) ──────────────
 const SHIPS = [
@@ -89,7 +102,7 @@ async function validateParticipant(db, gameId, uid) {
 // Request: { gameId, shooterUid, shotIndex, row, col }
 // Response: { result: "hit"|"miss"|"sunk", shipId: string|null }
 
-exports.resolveShot = onCall(async (request) => {
+exports.resolveShot = onCall(CALLABLE_OPTS, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Must be authenticated");
 
@@ -161,7 +174,7 @@ exports.resolveShot = onCall(async (request) => {
 // Request: { gameId }
 // Response: { success: true, winner: uid }
 
-exports.claimVictory = onCall(async (request) => {
+exports.claimVictory = onCall(CALLABLE_OPTS, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Must be authenticated");
 
@@ -229,7 +242,7 @@ exports.claimVictory = onCall(async (request) => {
 // Request: { gameId }
 // Response: { success: true }
 
-exports.forfeit = onCall(async (request) => {
+exports.forfeit = onCall(CALLABLE_OPTS, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Must be authenticated");
 
@@ -252,3 +265,76 @@ exports.forfeit = onCall(async (request) => {
 
   return { success: true };
 });
+
+// ── cleanupStaleGames ────────────────────────────────────────────────────────
+//
+// Scheduled hourly. Long-term hygiene: without this, /games and /roomCodes
+// grow forever — storage costs rise, room codes can never be reused (the
+// !data.exists() write rule makes every used code permanently dead), and
+// listener fan-out on large nodes slows down.
+//
+// Deletion policy:
+//   waiting        → older than 1 hour   (opponent never joined)
+//   setup / battle → inactive  24 hours  (both players abandoned mid-game)
+//   finished       → older than 24 hours (players had time to view results)
+//   no status      → malformed, delete
+//
+// Requires ".indexOn": ["meta/createdAt"] under /games in database.rules.json.
+// Processes up to 300 games per run; hourly schedule drains any backlog.
+
+const RETENTION = {
+  waitingMs: 60 * 60 * 1000,         // 1 hour
+  finishedMs: 24 * 60 * 60 * 1000,   // 24 hours
+  abandonedMs: 24 * 60 * 60 * 1000,  // 24 hours of inactivity in setup/battle
+};
+const CLEANUP_BATCH_LIMIT = 300;
+
+exports.cleanupStaleGames = onSchedule(
+  { schedule: "every 60 minutes", timeoutSeconds: 300, memory: "256MiB" },
+  async () => {
+    const db = getDatabase();
+    const now = Date.now();
+
+    // Only games at least 1 hour old are candidates.
+    const snap = await db
+      .ref("games")
+      .orderByChild("meta/createdAt")
+      .endAt(now - RETENTION.waitingMs)
+      .limitToFirst(CLEANUP_BATCH_LIMIT)
+      .get();
+
+    if (!snap.exists()) {
+      logger.info("cleanupStaleGames: nothing to clean");
+      return;
+    }
+
+    const updates = {};
+    let deleted = 0;
+
+    snap.forEach((gameSnap) => {
+      const meta = gameSnap.child("meta").val() || {};
+      const status = meta.status;
+      const lastActivity = meta.updatedAt || meta.createdAt || 0;
+      const idleMs = now - lastActivity;
+
+      const shouldDelete =
+        !status ||
+        (status === "waiting" && idleMs >= RETENTION.waitingMs) ||
+        (status === "finished" && idleMs >= RETENTION.finishedMs) ||
+        ((status === "setup" || status === "battle") && idleMs >= RETENTION.abandonedMs);
+
+      if (shouldDelete) {
+        updates[`games/${gameSnap.key}`] = null;
+        if (meta.roomCode) {
+          updates[`roomCodes/${meta.roomCode}`] = null; // free the code for reuse
+        }
+        deleted++;
+      }
+    });
+
+    if (deleted > 0) {
+      await db.ref().update(updates);
+    }
+    logger.info(`cleanupStaleGames: deleted ${deleted} of ${snap.numChildren()} candidates`);
+  }
+);
