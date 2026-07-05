@@ -106,8 +106,8 @@ exports.resolveShot = onCall(CALLABLE_OPTS, async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Must be authenticated");
 
-  const { gameId, shooterUid, shotIndex, row, col } = request.data;
-  if (!gameId || !shooterUid || shotIndex === undefined || row === undefined || col === undefined) {
+  const { gameId, shooterUid, shotIndex } = request.data;
+  if (!gameId || !shooterUid || shotIndex === undefined) {
     throw new HttpsError("invalid-argument", "Missing required fields");
   }
   if (shooterUid === uid) {
@@ -116,6 +116,12 @@ exports.resolveShot = onCall(CALLABLE_OPTS, async (request) => {
 
   const db = getDatabase();
   const meta = await validateParticipant(db, gameId, uid);
+
+  // The only shots this caller may resolve are the opponent's — never a third party's.
+  const opponentUid = meta.hostUid === uid ? meta.guestUid : meta.hostUid;
+  if (shooterUid !== opponentUid) {
+    throw new HttpsError("permission-denied", "May only resolve the opponent's shots");
+  }
 
   if (meta.status !== "battle") {
     throw new HttpsError("failed-precondition", "Game is not in battle phase");
@@ -128,31 +134,45 @@ exports.resolveShot = onCall(CALLABLE_OPTS, async (request) => {
     throw new HttpsError("failed-precondition", "Defender board not found");
   }
 
-  // Read all previous shots by this shooter to build hit history
+  // Read the shooter's shots once; use them both to locate the target shot and to build
+  // the prior-hit history. Reading here (not from request.data) is what makes the server
+  // authoritative: the client cannot lie about where it fired or force a re-resolve.
   const shotsSnap = await db.ref(`games/${gameId}/shots/${shooterUid}`).get();
-  const previousHitCoords = [];
-  if (shotsSnap.exists()) {
-    const shotsObj = shotsSnap.val();
-    const shotKeys = Object.keys(shotsObj);
-    for (let i = 0; i < shotKeys.length; i++) {
-      const s = shotsObj[shotKeys[i]];
-      if (s.result === "hit" || s.result === "sunk") {
-        previousHitCoords.push({ row: s.row, col: s.col });
-      }
-    }
+  if (!shotsSnap.exists()) {
+    throw new HttpsError("not-found", "No shots found for shooter");
   }
-
-  // Resolve
-  const outcome = resolveHit(row, col, placements, previousHitCoords);
-  const resultStr = outcome.sunk ? "sunk" : outcome.hit ? "hit" : "miss";
-
-  // Find the push key for this shot
-  const shotKeysSnap = await db.ref(`games/${gameId}/shots/${shooterUid}`).get();
-  const allKeys = shotKeysSnap.exists() ? Object.keys(shotKeysSnap.val()) : [];
+  const shotsObj = shotsSnap.val();
+  const allKeys = Object.keys(shotsObj);
   const pushKey = allKeys[shotIndex];
   if (!pushKey) {
     throw new HttpsError("not-found", `Shot push-key not found at index ${shotIndex}`);
   }
+
+  const storedShot = shotsObj[pushKey];
+  // Refuse to re-resolve: a shot that already has a result must never be recomputed
+  // (that would let a defender flip an earlier "hit" into a "miss").
+  if (storedShot.result !== undefined && storedShot.result !== null) {
+    throw new HttpsError("failed-precondition", "Shot has already been resolved");
+  }
+  // Authoritative coordinates come from the stored shot, not the request payload.
+  const row = storedShot.row;
+  const col = storedShot.col;
+  if (typeof row !== "number" || typeof col !== "number") {
+    throw new HttpsError("failed-precondition", "Stored shot is missing valid coordinates");
+  }
+
+  const previousHitCoords = [];
+  for (let i = 0; i < allKeys.length; i++) {
+    if (allKeys[i] === pushKey) continue; // exclude the shot being resolved
+    const s = shotsObj[allKeys[i]];
+    if (s.result === "hit" || s.result === "sunk") {
+      previousHitCoords.push({ row: s.row, col: s.col });
+    }
+  }
+
+  // Resolve using the trusted, stored coordinates.
+  const outcome = resolveHit(row, col, placements, previousHitCoords);
+  const resultStr = outcome.sunk ? "sunk" : outcome.hit ? "hit" : "miss";
 
   // Build atomic multi-path update
   const updates = {};

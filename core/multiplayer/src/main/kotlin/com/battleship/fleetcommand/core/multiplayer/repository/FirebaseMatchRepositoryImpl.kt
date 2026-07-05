@@ -199,6 +199,7 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
     // ── Server-side operations via Cloud Functions (with client-side fallback) ───
 
     override suspend fun claimVictory(gameId: String): Result<Unit> {
+        if (!SERVER_AUTHORITATIVE) return claimVictoryClientSide(gameId)
         return try {
             functions.getHttpsCallable("claimVictory")
                 .call(mapOf("gameId" to gameId))
@@ -226,6 +227,7 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
     }
 
     override suspend fun forfeit(gameId: String): Result<Unit> {
+        if (!SERVER_AUTHORITATIVE) return forfeitClientSide(gameId)
         return try {
             functions.getHttpsCallable("forfeit")
                 .call(mapOf("gameId" to gameId))
@@ -269,6 +271,11 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
         row: Int,
         col: Int,
     ): Result<ShotResolutionResult> {
+        // On Spark (no Cloud Functions) the defender resolves shots on-device instead —
+        // signal failure so OnlineGameViewModel falls back to resolveShotClientSide().
+        if (!SERVER_AUTHORITATIVE) {
+            return Result.failure(IllegalStateException("Client-authoritative mode: resolve on device"))
+        }
         return try {
             val data = mapOf(
                 "gameId"     to gameId,
@@ -335,5 +342,22 @@ class FirebaseMatchRepositoryImpl @Inject constructor(
             Timber.e(e, "writeShotResolution failed for game=$gameId shooter=$shooterUid pushKey=$pushKey")
             Result.failure(e)
         }
+    }
+
+    companion object {
+        /**
+         * Server-authoritative online play — shot resolution, victory and forfeit verified by
+         * Cloud Functions — requires the Firebase **Blaze** plan. On the free **Spark** plan there
+         * are no Cloud Functions, so the clients resolve shots and decide the winner themselves
+         * (client-authoritative). This keeps online multiplayer working for free at the cost of
+         * server-side cheat prevention.
+         *
+         * To switch to the secure server-authoritative flow later: upgrade to Blaze, run
+         * `firebase deploy --only functions`, then set this to `true` and ship an app update.
+         *
+         * Kept a plain `val` (not `const`) so the branch guards stay runtime checks and don't
+         * trip Kotlin's unreachable-code analysis under -allWarningsAsErrors.
+         */
+        private val SERVER_AUTHORITATIVE = false
     }
 }

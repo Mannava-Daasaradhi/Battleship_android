@@ -28,16 +28,6 @@
         <!-- F-13: Disable Firebase Analytics auto-collection until consent obtained -->
         <meta-data android:name="firebase_analytics_collection_deactivated" android:value="true" />
 
-        <!--
-            Play Games Services App ID — Section 7.
-            ⚠️ Replace "000000000000" with your real App ID from:
-            Play Console → Play Games Services → Setup and management → Configuration
-            The ID is a numeric string, e.g. "123456789012"
-        -->
-        <meta-data
-            android:name="com.google.android.gms.games.APP_ID"
-            android:value="@string/app_id" />
-
         <activity
             android:name=".MainActivity"
             android:exported="true"

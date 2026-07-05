@@ -23,14 +23,16 @@
             ".write": "auth != null && data.val() === null && newData.val() === auth.uid && root.child('games').child($gameId).child('meta/hostUid').val() !== auth.uid"
           },
           "status": {
-            ".write": "auth != null && ((data.val() === null && newData.val() === 'waiting') || (data.val() === 'waiting' && newData.val() === 'setup' && root.child('games').child($gameId).child('meta/guestUid').val() === auth.uid) || (data.val() === 'setup' && newData.val() === 'battle' && root.child('games').child($gameId).child('boards').child(root.child('games').child($gameId).child('meta/hostUid').val()).exists() && root.child('games').child($gameId).child('boards').child(root.child('games').child($gameId).child('meta/guestUid').val()).exists()))",
+            ".write": "auth != null && ((data.val() === null && newData.val() === 'waiting') || (data.val() === 'waiting' && newData.val() === 'setup' && root.child('games').child($gameId).child('meta/guestUid').val() === auth.uid) || (data.val() === 'setup' && newData.val() === 'battle' && root.child('games').child($gameId).child('boards').child(root.child('games').child($gameId).child('meta/hostUid').val()).exists() && root.child('games').child($gameId).child('boards').child(root.child('games').child($gameId).child('meta/guestUid').val()).exists()) || (data.val() === 'battle' && newData.val() === 'finished' && (root.child('games').child($gameId).child('meta/hostUid').val() === auth.uid || root.child('games').child($gameId).child('meta/guestUid').val() === auth.uid)))",
             ".validate": "newData.isString() && (newData.val() === 'waiting' || newData.val() === 'setup' || newData.val() === 'battle' || newData.val() === 'finished')"
           },
           "winner": {
-            ".write": false
+            ".write": "auth != null && !data.exists() && (root.child('games').child($gameId).child('meta/hostUid').val() === auth.uid || root.child('games').child($gameId).child('meta/guestUid').val() === auth.uid)",
+            ".validate": "newData.isString() && (newData.val() === newData.parent().child('hostUid').val() || newData.val() === newData.parent().child('guestUid').val())"
           },
           "currentTurn": {
-            ".write": "auth != null && data.val() === null && root.child('games').child($gameId).child('meta/hostUid').val() === auth.uid"
+            ".write": "auth != null && ((data.val() === null && root.child('games').child($gameId).child('meta/hostUid').val() === auth.uid) || (root.child('games').child($gameId).child('meta/status').val() === 'battle' && data.val() !== auth.uid && (root.child('games').child($gameId).child('meta/hostUid').val() === auth.uid || root.child('games').child($gameId).child('meta/guestUid').val() === auth.uid)))",
+            ".validate": "newData.isString() && (newData.val() === newData.parent().child('hostUid').val() || newData.val() === newData.parent().child('guestUid').val())"
           },
           "createdAt": {
             ".write": "auth != null && !data.exists()",
@@ -66,11 +68,13 @@
           ".read": "auth != null && (root.child('games').child($gameId).child('meta/hostUid').val() === auth.uid || root.child('games').child($gameId).child('meta/guestUid').val() === auth.uid)",
           "$shooterUid": {
             "$shotPushKey": {
-              ".write": "auth != null && auth.uid === $shooterUid && !data.exists() && root.child('games').child($gameId).child('meta/status').val() === 'battle' && root.child('games').child($gameId).child('meta/currentTurn').val() === auth.uid",
-              ".validate": "newData.hasChildren(['row','col','timestamp']) && !newData.child('result').exists() && !newData.child('shipId').exists()",
-              "row": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 9" },
-              "col": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 9" },
-              "timestamp": { ".validate": "newData.val() <= now" },
+              ".write": "auth != null && (root.child('games').child($gameId).child('meta/hostUid').val() === auth.uid || root.child('games').child($gameId).child('meta/guestUid').val() === auth.uid) && root.child('games').child($gameId).child('meta/status').val() === 'battle' && ((auth.uid === $shooterUid && !data.exists() && root.child('games').child($gameId).child('meta/currentTurn').val() === auth.uid) || (auth.uid !== $shooterUid && data.exists() && !data.child('result').exists()))",
+              ".validate": "newData.hasChildren(['row','col','timestamp']) && (!newData.child('result').exists() || auth.uid !== $shooterUid) && (!newData.child('shipId').exists() || auth.uid !== $shooterUid)",
+              "row": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 9 && (!data.exists() || newData.val() === data.val())" },
+              "col": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 9 && (!data.exists() || newData.val() === data.val())" },
+              "timestamp": { ".validate": "newData.val() <= now && (!data.exists() || newData.val() === data.val())" },
+              "result": { ".validate": "newData.isString() && (newData.val() === 'hit' || newData.val() === 'miss' || newData.val() === 'sunk')" },
+              "shipId": { ".validate": "newData.isString() && newData.val().length <= 20" },
               "$other": { ".validate": false }
             }
           }

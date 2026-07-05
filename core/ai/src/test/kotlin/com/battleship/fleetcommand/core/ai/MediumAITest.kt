@@ -278,4 +278,89 @@ class MediumAiTest {
         val nextShot = ai.selectShot(board)
         assertTrue(nextShot.isValid())
     }
+
+    // ── Regression: reverse-walk must not strand a ship (bug A1) ────────────────
+
+    @Test
+    fun `medium AI extends the correct way when the second hit is behind the origin`() {
+        // Ship in column 5. Origin hit at (5,5); the follow-up probe hits ABOVE it at (4,5).
+        // The locked direction must be derived from the hit positions (-1, upward), so the
+        // next shot continues UP to (3,5) instead of wandering off below the origin.
+        var board = Board.empty()
+        val origin = Coord.fromRowCol(5, 5)
+        val above = Coord.fromRowCol(4, 5)
+
+        ai.onShotResult(origin, FireResult.HIT, null, board)
+        board = board.withCell(origin, CellState.Hit)
+        ai.onShotResult(above, FireResult.HIT, null, board)
+        board = board.withCell(above, CellState.Hit)
+
+        assertEquals(MediumAi.Axis.VERTICAL, ai.currentAxis())
+        val shot = ai.selectShot(board)
+        assertEquals(5, shot.colOf(), "must stay in the ship's column")
+        assertEquals(3, shot.rowOf(), "must continue up the column, not strand the ship")
+    }
+
+    @Test
+    fun `medium AI reverses past already-hit cells to reach the far end of a ship`() {
+        // Battleship vertical in column 5, rows 2..5. Discovery order forces a reversal that
+        // has to step THROUGH hits on the near side to find open water at (2,5).
+        var board = Board.empty()
+        val origin = Coord.fromRowCol(3, 5)
+        ai.onShotResult(origin, FireResult.HIT, null, board)
+        board = board.withCell(origin, CellState.Hit)
+
+        val second = Coord.fromRowCol(4, 5) // below origin → lock VERTICAL, direction +1 (down)
+        ai.onShotResult(second, FireResult.HIT, null, board)
+        board = board.withCell(second, CellState.Hit)
+
+        // Walk down: (5,5) hit …
+        val down1 = ai.selectShot(board)
+        assertEquals(Coord.fromRowCol(5, 5).index, down1.index)
+        ai.onShotResult(down1, FireResult.HIT, null, board)
+        board = board.withCell(down1, CellState.Hit)
+
+        // … then (6,5) which is water (a miss — ship ends at row 5).
+        val down2 = ai.selectShot(board)
+        assertEquals(Coord.fromRowCol(6, 5).index, down2.index)
+        ai.onShotResult(down2, FireResult.MISS, null, board)
+        board = board.withCell(down2, CellState.Miss)
+
+        // Forward end is dead; the AI must reverse and step through the hit cells to (2,5).
+        val reversed = ai.selectShot(board)
+        assertEquals(Coord.fromRowCol(2, 5).index, reversed.index,
+            "must reverse past the hit line to finish the ship at (2,5)")
+    }
+
+    // ── Regression: targeting state must not bleed across ships (bug A2) ─────────
+
+    @Test
+    fun `medium AI clears targeting state when a target dead-ends without sinking`() {
+        // An isolated hit whose only neighbours all become misses forces target exhaustion.
+        // Afterwards the AI must be a clean slate so the NEXT ship anchors on its own origin.
+        var board = Board.empty()
+        val isolated = Coord.fromRowCol(0, 0)
+        ai.onShotResult(isolated, FireResult.HIT, null, board)
+        board = board.withCell(isolated, CellState.Hit)
+        board = board.withCell(Coord.fromRowCol(0, 1), CellState.Miss)
+        board = board.withCell(Coord.fromRowCol(1, 0), CellState.Miss)
+
+        val huntShot = ai.selectShot(board) // drains the dead target stack → back to hunt
+        assertEquals(MediumAi.HuntPhase.HUNT, ai.currentPhase())
+        assertNull(ai.currentAxis())
+        assertTrue(huntShot.isValid())
+
+        // A fresh ship far away: a single hit must NOT be axis-locked from the stale origin,
+        // and its second collinear hit must lock relative to the NEW origin.
+        val newOrigin = Coord.fromRowCol(5, 5)
+        board = board.withCell(newOrigin, CellState.Hit)
+        ai.onShotResult(newOrigin, FireResult.HIT, null, board)
+        assertNull(ai.currentAxis(), "a single fresh hit must not inherit a stale axis lock")
+
+        val second = Coord.fromRowCol(5, 6)
+        board = board.withCell(second, CellState.Hit)
+        ai.onShotResult(second, FireResult.HIT, null, board)
+        assertEquals(MediumAi.Axis.HORIZONTAL, ai.currentAxis(),
+            "must lock relative to the new origin (5,5)-(5,6)")
+    }
 }

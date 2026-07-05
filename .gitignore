@@ -31,3 +31,21 @@ build-logic/convention/bin/
 core/ai/bin/
 core/domain/bin/
 .kotlin/
+
+# Node (Cloud Functions + Firebase rules tests)
+node_modules/
+
+# Logs & JVM crash dumps
+*.log
+hs_err_pid*.log
+replay_pid*.log
+
+# Local tooling artifacts (knowledge-graph cache, smoke screenshots, one-off scripts)
+graphify-out/
+.graphify_python
+.smoke_*.png
+fix_icons.py
+
+# Internal security-audit docs — do NOT publish in a public repo (kept locally only)
+security-audit-report.md
+security-audit-summary.md

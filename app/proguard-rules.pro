@@ -51,10 +51,6 @@
 -dontwarn com.google.android.gms.**
 -keepclassmembers class com.battleship.fleetcommand.** { public <init>(); }
 
-# ── Google Play Games v2 ──────────────────────────────────────────────────
--keep class com.google.android.gms.games.** { *; }
--keep class com.google.android.gms.tasks.** { *; }
-
 # ── Lottie ────────────────────────────────────────────────────────────────
 -dontwarn com.airbnb.lottie.**
 -keep class com.airbnb.lottie.** { *; }

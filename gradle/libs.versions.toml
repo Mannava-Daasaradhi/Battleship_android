@@ -36,7 +36,6 @@ firebase-auth-ktx             = "23.2.0"
 firebase-database-ktx         = "21.0.0"
 
 # Google Play
-play-services-games-v2        = "20.1.2"
 play-integrity                = "1.4.0"
 
 # Security
@@ -123,7 +122,6 @@ firebase-appcheck-playintegrity = { group = "com.google.firebase", name = "fireb
 firebase-appcheck-debug     = { group = "com.google.firebase", name = "firebase-appcheck-debug" }
 
 # ── Google Play ───────────────────────────────────────────────────────────
-play-services-games-v2      = { group = "com.google.android.gms", name = "play-services-games-v2", version.ref = "play-services-games-v2" }
 play-integrity              = { group = "com.google.android.play", name = "integrity", version.ref = "play-integrity" }
 
 # ── Security ──────────────────────────────────────────────────────────────

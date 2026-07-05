@@ -21,27 +21,44 @@ done from the codebase.
 | No App Check (scripted clients) | `BattleshipApplication.kt`, gradle files | API key is extractable from any APK |
 | `versionCode = 1` hardcoded | `app-build.gradle.kts`, `release.yml` | Play rejects the 2nd release |
 | Silent empty-credential signing fallback | `app-build.gradle.kts` | Misconfigured CI could mis-sign |
+| `resolveShot` trusted client-sent coordinates | `functions/index.js` | Defender could force misses / re-resolve a hit into a miss — now reads the stored shot and refuses already-resolved shots |
+| Medium AI abandoned half-sunk ships | `core/ai/MediumAI.kt` | Reverse-walk stranding + stale cross-ship state fixed (regressions guarded by tests) |
+| AI placement used an uncapped retry loop | `feature/game/.../BattleViewModel.kt` | Replaced with `GameEngine.autoPlace()` (guaranteed to terminate) |
+| Play Games placeholder App ID | removed | Unused leaderboard/achievement code + `000000000000` App ID stripped for v1 |
+| Online required Blaze (Cloud Functions) | `database.rules.json`, `FirebaseMatchRepositoryImpl.kt` | Converted to **client-authoritative** so online works on the free **Spark** plan (no functions). `SERVER_AUTHORITATIVE=false`; flip to `true` after upgrading to Blaze + deploying functions for server-side anti-cheat. |
 
-Run the rules tests locally (needs Firebase CLI + Java for the emulator):
+Run the rules tests (needs Firebase CLI + **JDK 21+** for the emulator; they run in
+CI too):
 
     firebase emulators:exec --only database --project demo-battleship \
       "cd rules-tests && npm install && npm test"
 
-Then full deploy in this order:
-1. `firebase deploy --only database,functions`
-2. Full manual multiplayer pass: host → join → place → battle → win → forfeit.
-   Watch for one specific thing: the host's client must write `currentTurn`
-   exactly ONCE at battle start — arbitrary turn flips are now blocked.
-3. Ship the app update (App Check included, enforcement still off).
-4. After App Check metrics look clean: enable enforcement in console AND flip
-   `ENFORCE_APP_CHECK = true` in functions, redeploy functions.
+### Deploy for online on the FREE Spark plan (current setup)
+
+Online is **client-authoritative** — no Cloud Functions, no Blaze required.
+
+1. Firebase Console → **Authentication → Sign-in method → enable Anonymous**.
+2. `firebase deploy --only database`  ← rules ONLY (do **not** deploy functions on Spark).
+3. Full manual multiplayer pass: host → join → place → battle → win → forfeit.
+4. Ship the app update.
+
+Trade-off accepted for free play: a player could cheat the *outcome* of a match
+(clients resolve their own shots). Ship boards stay private and non-players are locked
+out. To close the cheat gap later, upgrade to Blaze, `firebase deploy --only functions`,
+set `SERVER_AUTHORITATIVE = true` in `FirebaseMatchRepositoryImpl.kt`, and ship an update.
+
+Known Spark limitation: finished/abandoned games are not auto-deleted (the scheduled
+cleanup function needs Blaze). At friends-scale this is harmless (1 GB storage, ~887M
+room codes); revisit when you enable Blaze — the cleanup function is already written.
 
 ---
 
 ## 🔲 CONSOLE / ACCOUNT WORK (owner-only — no code can do these)
 
-1. **Firebase: Blaze plan** — required for Cloud Functions; also lifts the
-   100-connection Spark cap to 200k. Set a budget alert (e.g. $10/mo) the same day.
+1. **Firebase plan — Spark (free) is enough for v1.** Online now runs
+   client-authoritative, so no Cloud Functions / Blaze are required. Spark caps at
+   100 simultaneous connections (fine for friends-scale). Upgrade to Blaze later only
+   when you want server-side anti-cheat + auto-cleanup (see deploy notes above).
 2. **Firebase → App Check** — register the Android app with the Play Integrity
    provider (needs the release SHA-256 fingerprint from Play Console → App
    integrity). Add your debug token from Logcat for local builds. Do NOT
@@ -55,17 +72,15 @@ Then full deploy in this order:
    covering: data collected (anonymous auth UID, crash logs, game moves),
    retention (games auto-deleted within 24h — true once cleanup deploys),
    contact email.
-5. **Play Games Services** — the manifest `APP_ID` is still the `000000000000`
-   placeholder. Either configure Play Games in Play Console and set the real
-   ID, or remove the integration before launch — a placeholder ID crashes the
-   Play Games SDK on init for some flows.
-6. **Repo hygiene** (one-time):
-
-        git rm "CUsersdaasaAppDataLocalTemplogcat.txt" fix_icons.py
-        git rm -r graphify-out
-        git rm security-audit-report.md security-audit-summary.md  # marked Confidential — keep locally, not in a public repo
-        echo -e "graphify-out/\n*.keystore\n*logcat*.txt" >> .gitignore
-
+5. **Play Games Services** — ✅ DONE (removed for v1). The unused leaderboard /
+   achievement code and its placeholder `APP_ID` have been stripped, so there is
+   no Play Games setup blocking launch. Re-add via Play Console + code wiring in a
+   later update if you want leaderboards.
+6. **Repo hygiene** — ✅ DONE. `graphify-out/` (248 files), smoke screenshots,
+   stray scripts (`fix_icons.py`), zero-byte artifacts, and JVM crash logs have
+   been removed; `node_modules/`, `*.log`, and `graphify-out/` are now ignored;
+   the Confidential `security-audit-*.md` are untracked (kept on disk only). The
+   public repo no longer leaks the audit or carries tooling bloat.
 7. **GitHub Secrets sanity check** — `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`,
    `KEY_ALIAS`, `KEY_PASSWORD`, `SERVICE_ACCOUNT_JSON`, `GOOGLE_SERVICES_JSON`
    all set; keystore backed up somewhere outside the repo (losing it loses the

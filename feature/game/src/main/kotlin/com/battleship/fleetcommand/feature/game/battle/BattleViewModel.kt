@@ -16,6 +16,7 @@ import com.battleship.fleetcommand.core.domain.model.GameMode
 import com.battleship.fleetcommand.core.domain.player.Difficulty
 import com.battleship.fleetcommand.core.domain.player.PlayerSlot
 import com.battleship.fleetcommand.core.domain.repository.GameRepository
+import com.battleship.fleetcommand.core.domain.ship.AdjacencyMode
 import com.battleship.fleetcommand.core.domain.ship.ShipId
 import com.battleship.fleetcommand.core.domain.ship.ShipPlacement
 import com.battleship.fleetcommand.core.domain.ship.ShipRegistry
@@ -166,23 +167,11 @@ class BattleViewModel @Inject constructor(
     }
 
     private suspend fun generateAiPlacements(): List<ShipPlacement> = withContext(Dispatchers.Default) {
-        val result = mutableListOf<ShipPlacement>()
-        for (shipDef in ShipRegistry.ALL) {
-            var placed = false
-            while (!placed) {
-                val orientation = if ((0..1).random() == 0)
-                    com.battleship.fleetcommand.core.domain.Orientation.Horizontal
-                else com.battleship.fleetcommand.core.domain.Orientation.Vertical
-                val row = (0 until GameConstants.BOARD_SIZE).random()
-                val col = (0 until GameConstants.BOARD_SIZE).random()
-                val coord = Coord.fromRowCol(row, col)
-                val placement = ShipPlacement(shipDef.id, coord, orientation)
-                val errors = com.battleship.fleetcommand.core.domain.ship.PlacementValidator
-                    .validate(placement, result, com.battleship.fleetcommand.core.domain.ship.AdjacencyMode.RELAXED)
-                if (errors.isEmpty()) { result.add(placement); placed = true }
-            }
-        }
-        result
+        // Delegate to the domain engine's auto-placement. It is guaranteed to terminate
+        // (it falls back to an exhaustive board scan) and honours the same adjacency mode the
+        // human player's placement uses — unlike the previous uncapped random-retry loop, which
+        // could in principle spin forever and re-implemented placement rules by hand.
+        gameEngine.autoPlace(AdjacencyMode.RELAXED)
     }
 
     fun onEvent(event: UiEvent) {

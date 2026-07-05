@@ -134,8 +134,5 @@ dependencies {
     // LeakCanary removed — installs unwanted companion "Leaks" app on device.
     // Re-add only when actively debugging memory leaks locally.
 
-    // Play Games
-    implementation(libs.play.services.games.v2)
-
     testImplementation(project(":core:testing"))
 }
