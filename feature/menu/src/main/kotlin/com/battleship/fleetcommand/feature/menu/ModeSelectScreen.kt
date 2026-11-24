@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.battleship.fleetcommand.core.domain.FeatureFlags
 import com.battleship.fleetcommand.core.ui.components.BattleshipButton
 import com.battleship.fleetcommand.core.ui.theme.NavyBackground
 import com.battleship.fleetcommand.core.ui.theme.NavySurface
@@ -77,12 +78,14 @@ fun ModeSelectScreen(
                     subtitle = "Local two-player on this device",
                     onClick = { viewModel.onEvent(ModeSelectViewModel.UiEvent.SelectLocal) },
                 )
-                ModeCard(
-                    emoji = "🌐",
-                    title = "Online",
-                    subtitle = "Firebase real-time matchmaking",
-                    onClick = { viewModel.onEvent(ModeSelectViewModel.UiEvent.SelectOnline) },
-                )
+                if (FeatureFlags.ONLINE_MULTIPLAYER_ENABLED) {
+                    ModeCard(
+                        emoji = "🌐",
+                        title = "Online",
+                        subtitle = "Firebase real-time matchmaking",
+                        onClick = { viewModel.onEvent(ModeSelectViewModel.UiEvent.SelectOnline) },
+                    )
+                }
             }
         }
     }
