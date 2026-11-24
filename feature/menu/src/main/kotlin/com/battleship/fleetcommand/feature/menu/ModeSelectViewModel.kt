@@ -7,6 +7,7 @@ package com.battleship.fleetcommand.feature.menu
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.battleship.fleetcommand.core.domain.FeatureFlags
 import com.battleship.fleetcommand.core.domain.model.GameMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -38,7 +39,8 @@ class ModeSelectViewModel @Inject constructor() : ViewModel() {
             when (event) {
                 UiEvent.SelectAi     -> _uiEffect.emit(UiEffect.NavigateToDifficulty(GameMode.AI.name))
                 UiEvent.SelectLocal  -> _uiEffect.emit(UiEffect.NavigateToPlayerNames(GameMode.LOCAL.name))
-                UiEvent.SelectOnline -> _uiEffect.emit(UiEffect.NavigateToOnlineLobby)
+                UiEvent.SelectOnline ->
+                    if (FeatureFlags.ONLINE_MULTIPLAYER_ENABLED) _uiEffect.emit(UiEffect.NavigateToOnlineLobby)
             }
         }
     }

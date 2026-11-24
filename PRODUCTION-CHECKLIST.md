@@ -53,6 +53,20 @@ room codes); revisit when you enable Blaze — the cleanup function is already w
 
 ---
 
+## 🚦 v1 SHIPS OFFLINE-ONLY
+
+`FeatureFlags.ONLINE_MULTIPLAYER_ENABLED = false` (`core/domain/.../Constants.kt`)
+hides the Online mode card, so players only see **vs AI** and **Pass & Play**. The
+online code stays compiled and tested, but players can't reach it, and the app never
+signs in anonymously or opens a database connection. Crashlytics still reports crashes.
+
+For v1, skip the "Deploy for online" steps above and console items 1–2 below.
+**To go online later:** do those steps, flip the flag to `true`, and ship an update.
+For the v1 Data safety form, declare only Crashlytics crash data. Add the anonymous
+auth UID and game moves when online launches.
+
+---
+
 ## 🔲 CONSOLE / ACCOUNT WORK (owner-only — no code can do these)
 
 1. **Firebase plan — Spark (free) is enough for v1.** Online now runs

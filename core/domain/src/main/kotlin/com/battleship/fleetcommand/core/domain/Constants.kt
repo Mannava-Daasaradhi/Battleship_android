@@ -12,3 +12,14 @@ object GameConstants {
     const val MAX_CHAT_MESSAGE_LENGTH = 120
     const val SHOT_RATE_LIMIT_MS = 500L
 }
+/**
+ * Release-time feature switches.
+ *
+ * v1 ships offline-only (vs AI + Pass & Play). The online stack (Firebase RTDB,
+ * lobby, OnlineBattleScreen) stays compiled and tested but is unreachable from
+ * the UI. To launch online: deploy `database.rules.json`, enable Anonymous Auth,
+ * flip this to `true`, and ship an update.
+ */
+object FeatureFlags {
+    const val ONLINE_MULTIPLAYER_ENABLED = false
+}
